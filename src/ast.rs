@@ -29,13 +29,14 @@ pub enum AstNode {
 
 /*
 Statement
-: Identifier := Expression `;` // use some sort of L-Value rather than Identifier for Vector/Array access
-| Expression `;`
+: Identifier := Expression ; // use some sort of L-Value rather than Identifier for Vector/Array access
+| Expression ;
 ;
 */
 #[derive(Debug)]
 pub enum Statement {
     Assignment(Identifier, Expression),
+    Expression(Expression),
 }
 
 /*
@@ -127,10 +128,27 @@ impl Display for AstNode {
             f,
             "{:width$}",
             match self {
-                AstNode::Expression(expr) => expr,
+                AstNode::Expression(e) => e,
+                // AstNode::Statement(s) => s,
             },
             width = w + INDENT_INCREASE
         )
+    }
+}
+impl Display for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = if let Some(n) = f.width() { n } else { 0 };
+        match self {
+            Statement::Assignment(i, e) => {
+                writeln!(f, "{:w$}Assignment:", "")?;
+                write!(f, "{:width$}", i, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
+            }
+            Statement::Expression(e) => {
+                write!(f, "{:w$}", e)?;
+            }
+        }
+        Ok(())
     }
 }
 impl Display for Expression {
@@ -204,5 +222,11 @@ impl Display for Literal {
             Literal::StringLiteral(n) => writeln!(f, "{:w$}StringLiteral({})", "", n)?,
         }
         Ok(())
+    }
+}
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = if let Some(n) = f.width() { n } else { 0 };
+        writeln!(f, "{:w$}Identifier(\"{}\")", "", self.name)
     }
 }

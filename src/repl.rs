@@ -158,3 +158,12 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         Ok(true)
     }
 }
+
+pub fn init() -> io::Result<()> {
+    let stdin = io::stdin().lock();
+    let stdout = io::stdout();
+
+    let mut repl = Repl::new(stdin, stdout);
+    repl.start()?;
+    Ok(())
+}

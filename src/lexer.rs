@@ -7,6 +7,7 @@ use regex::Regex;
 #[derive(Debug, Clone)]
 pub enum Token {
     Literal(Literal),
+    Identifier(String),
     LeftParen,
     RightParen,
     LeftAngle,
@@ -17,6 +18,10 @@ pub enum Token {
     Slash,
     Comma,
     ColonEqual,
+    Equal,
+    Semicolon,
+    Let,
+    Set,
     Eof,
 }
 
@@ -61,60 +66,59 @@ impl Lexer {
             }
         }
         // text = string[cursor:]
-        let text = self.text.split_at(self.cursor).1;
+        let text: String = self.text.split_at(self.cursor).1.to_owned();
         if text.len() == 0 {
             return Err(LexerError::Eof);
         }
+        let mut match_token = |pattern, fun: fn(&str) -> Token| {
+            if let Some(mat) = find(pattern, &text) {
+                self.loc.line += 1;
+                let delta = mat.end();
+                self.move_cursor(delta);
+                Some(fun(mat.as_str()))
+            } else {
+                None
+            }
+        };
         // update loc on newline
-        if let Some(mat) = find(r"^\n", text) {
+        if text.starts_with('\n') {
             self.loc.line += 1;
-            let delta = mat.end();
-            self.move_cursor(delta);
-            // either this or return whitespace error?
+            self.move_cursor(1);
             return self.next_token();
         }
         // skip whitespace
-        if let Some(mat) = find(r"^\s+", text) {
+        if let Some(mat) = find(r"^\s+", &text) {
             let delta = mat.end();
             self.move_cursor(delta);
             // either this or return whitespace error?
             return self.next_token();
         }
         // grab integers
-        if let Some(mat) = find(r"^\d+", text) {
-            let delta = mat.end();
-            let int: i32 = mat.as_str().parse().unwrap();
-            self.move_cursor(delta);
-            return Ok(Token::Literal(Literal::IntLiteral(int)));
-        }
+        let t: Option<Token> = match_token(r"^\d+", |mat| {
+            let int: i32 = mat.parse().unwrap();
+            Token::Literal(Literal::IntLiteral(int))
+        }).
         // grab quotes
-        if let Some(mat) = find(r#"^"[^"]*""#, text) {
-            let delta = mat.end();
-            let r = Token::Literal(Literal::StringLiteral(
-                mat.as_str()
-                    .strip_prefix('"')
+        // TODO: Handle escape characters
+        or(match_token(r#"^"[^"]*""#, |mat| {
+            Token::Literal(Literal::StringLiteral(
+                mat.strip_prefix('"')
                     .unwrap()
                     .strip_suffix('"')
                     .unwrap()
                     .to_owned(),
-            ));
-            self.move_cursor(delta);
-            return Ok(r);
-        }
-        if let Some(mat) = find(r"^:=", text) {
-            let delta = mat.end();
-            self.move_cursor(delta);
-            return Ok(Token::ColonEqual);
-        }
-        // all single characters (handled by build_simple)
-        if let Some(mat) = find(r"^[\(\)<>\+\*/\-,]", text) {
-            let r = build_simple(mat.as_str());
-            let delta = mat.end();
-            self.move_cursor(delta);
-            return Ok(r);
-        }
-        return Err(LexerError::UnknownToken(
-            if let Some(mat) = find(r"[^\s]+", text) {
+            ))
+        })).
+        // Assignment `:=`, let, set
+        or(match_token(r"^:=", |_| Token::ColonEqual)).
+        or(match_token(r"^let", |_| Token::Let)).
+        or(match_token(r"^set", |_| Token::Set)).
+        // all single character tokens (handled by build_simple)
+        or(match_token(r"^[\(\)<>\+\*/\-,;=]", |mat| build_simple(mat))).
+        or(match_token(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned())}));
+
+        return t.ok_or(LexerError::UnknownToken(
+            if let Some(mat) = find(r"[^\s]+", &text) {
                 mat.as_str().to_owned()
             } else {
                 text.chars().take(MAX_SNIPPET_LENGTH).collect()
@@ -166,72 +170,8 @@ fn build_simple(string: &str) -> Token {
         "*" => Token::Star,
         "/" => Token::Slash,
         "," => Token::Comma,
+        ";" => Token::Semicolon,
+        "=" => Token::Equal,
         _ => panic!("Unreachable"),
     }
 }
-
-/*
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-*/
-// enum TokenType {
-//     OpenParen,
-//     CloseParen,
-//     Plus,
-//     Minus,
-//     Star,
-//     Slash,
-//     Bar,
-//     Literal(Value),
-//     Identifier(String),
-// }
-
-// struct Value {}
-// struct Location {
-//     line: u32,
-//     col: u32,
-// }
-
-// struct Token {
-//     location: Location,
-//     token: TokenType,
-// }
-
-// fn tokenize(line: &str) -> VecDeque<Token> {
-//     let mut buffer: String = String::new();
-//     let mut chars: VecDeque<char> = line.chars().collect();
-//     loop {
-//         let Some(&c) = chars.front();
-//         match c {
-//             w if w.is_whitespace() => continue,
-//             n if n.is_numeric() => {}
-//             _ => {}
-//         }
-//     }
-//     todo!()
-// }

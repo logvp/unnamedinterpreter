@@ -25,6 +25,11 @@ impl Parser {
         Ok(ast)
     }
 
+    fn parse_statement(&mut self) -> Result<ast::Statement, Error> {
+        // println!("parsing statement");
+        todo!()
+    }
+
     fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
         // println!("parsing expression");
         let lhs: ast::Term = self.parse_term()?;
