@@ -52,8 +52,8 @@ Expression
 */
 #[derive(Debug)]
 pub enum Expression {
-    Add(Term, Rc<Expression>),
-    Subtract(Term, Rc<Expression>),
+    Add(Term, Box<Expression>),
+    Subtract(Term, Box<Expression>),
     Term(Term),
 }
 
@@ -66,8 +66,8 @@ Term
 */
 #[derive(Debug)]
 pub enum Term {
-    Multiply(Factor, Rc<Term>),
-    Divide(Factor, Rc<Term>),
+    Multiply(Factor, Box<Term>),
+    Divide(Factor, Box<Term>),
     Factor(Factor),
 }
 
@@ -83,8 +83,8 @@ Factor
 pub enum Factor {
     Literal(Literal),
     // Identifier(Identifier),
-    Expression(Rc<Expression>),
-    Negate(Rc<Factor>),
+    Expression(Box<Expression>),
+    Negate(Box<Factor>),
     Variable(Identifier),
 }
 

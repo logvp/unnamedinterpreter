@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::ast;
 use crate::error::{Error, LexerError, ParserError};
 use crate::lexer::{Lexer, Token};
@@ -94,11 +92,11 @@ impl Parser {
         Ok(match self.token()? {
             Token::Plus => {
                 self.consume();
-                ast::Expression::Add(lhs, Rc::new(self.parse_expression()?))
+                ast::Expression::Add(lhs, Box::new(self.parse_expression()?))
             }
             Token::Minus => {
                 self.consume();
-                ast::Expression::Subtract(lhs, Rc::new(self.parse_expression()?))
+                ast::Expression::Subtract(lhs, Box::new(self.parse_expression()?))
             }
             _ => ast::Expression::Term(lhs),
         })
@@ -110,11 +108,11 @@ impl Parser {
         Ok(match self.token()? {
             Token::Star => {
                 self.consume();
-                ast::Term::Multiply(lhs, Rc::new(self.parse_term()?))
+                ast::Term::Multiply(lhs, Box::new(self.parse_term()?))
             }
             Token::Slash => {
                 self.consume();
-                ast::Term::Divide(lhs, Rc::new(self.parse_term()?))
+                ast::Term::Divide(lhs, Box::new(self.parse_term()?))
             }
             _ => ast::Term::Factor(lhs),
         })
@@ -130,14 +128,14 @@ impl Parser {
                 let parenthesized = self.parse_expression()?;
                 if let Token::RightParen = self.token()? {
                     self.consume();
-                    ast::Factor::Expression(Rc::new(parenthesized))
+                    ast::Factor::Expression(Box::new(parenthesized))
                 } else {
                     Err(ParserError::Error("missing closing parenthesis".to_owned()))?
                 }
             }
             Token::Minus => {
                 self.consume();
-                ast::Factor::Negate(Rc::new(self.parse_factor()?))
+                ast::Factor::Negate(Box::new(self.parse_factor()?))
             }
             Token::Literal(literal) => {
                 self.consume();
