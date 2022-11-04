@@ -84,7 +84,7 @@ pub enum Factor {
     Expression(Box<Expression>),
     Negate(Box<Factor>),
     Variable(Identifier),
-    Function(Identifier, Vec<Expression>),
+    Function(Identifier, Vec<Expression>), // hold Expression not identifier ( will change parsing ':(' )
 }
 
 #[derive(Debug)]

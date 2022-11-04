@@ -149,7 +149,7 @@ impl Parser {
             Token::Identifier(name) => {
                 if let Token::LeftParen = self.lexer.peek()? {
                     let x = self.parse_function_call()?;
-                    println!("{:?}", x);
+                    // println!("{:?}", x);
                     x
                 } else {
                     self.consume();
@@ -166,7 +166,7 @@ impl Parser {
 
     fn parse_function_call(&mut self) -> Result<ast::Factor, Error> {
         if let Token::Identifier(name) = self.token()? {
-            println!("{:?}", self.token()?);
+            // println!("{:?}", self.token()?);
             self.consume();
             if let Token::LeftParen = self.token()? {
                 // println!("{:?}", self.token()?);
