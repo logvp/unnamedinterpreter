@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
-    rc::Rc,
 };
 
 #[derive(Debug, Default)]
@@ -73,8 +72,8 @@ pub enum Term {
 
 /*
 Factor
-: LITERAL
-| IDENTIFIER
+: Literal
+| Identifier
 | ( Expression )
 | - Factor
 ;
@@ -82,10 +81,10 @@ Factor
 #[derive(Debug)]
 pub enum Factor {
     Literal(Literal),
-    // Identifier(Identifier),
     Expression(Box<Expression>),
     Negate(Box<Factor>),
     Variable(Identifier),
+    Function(Identifier, Vec<Expression>),
 }
 
 #[derive(Debug)]
@@ -235,6 +234,18 @@ impl Display for Factor {
             }
             Factor::Variable(i) => {
                 write!(f, "{:w$}", i)?;
+            }
+            Factor::Function(fun, args) => {
+                let mut first = true;
+                write!(f, "{:w$}(", fun)?;
+                for arg in args {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", arg)?;
+                    first = false;
+                }
+                write!(f, ")")?;
             }
         }
         Ok(())

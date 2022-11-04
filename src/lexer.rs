@@ -25,6 +25,11 @@ pub enum Token {
     Set,
     Eof,
 }
+impl Token {
+    pub fn kind_eq(&self, other: &Token) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
 
 const MAX_SNIPPET_LENGTH: usize = 20;
 
@@ -57,7 +62,7 @@ impl Lexer {
         self.loc.col += update; // TODO: Doesn't handle newlines
     }
 
-    // Proxy for debugging purposes
+    // // Proxy for debugging purposes
     // pub fn next_token(&mut self) -> Result<Token, LexerError> {
     //     let r = self.debug_next_token();
     //     println!("TOKEN: {:?}", r);
@@ -79,7 +84,7 @@ impl Lexer {
         if text.len() == 0 {
             return Err(LexerError::Eof);
         }
-        let mut match_token = |pattern, fun: fn(&str) -> Token| {
+        let mut match_token_pattern = |pattern, fun: fn(&str) -> Token| {
             if let Some(mat) = find(pattern, &text) {
                 // self.loc.line += 1; // TODO: this is not right lol
                 let delta = mat.end();
@@ -89,6 +94,21 @@ impl Lexer {
                 None
             }
         };
+        fn match_token_simple(
+            pattern: &str,
+            token: Token,
+            text: &str,
+            lex: &mut Lexer,
+        ) -> Option<Token> {
+            if let Some(mat) = find(pattern, text) {
+                // self.loc.line += 1; // TODO: this is not right lol
+                let delta = mat.end();
+                lex.move_cursor(delta);
+                Some(token)
+            } else {
+                None
+            }
+        }
         // update loc on newline
         if text.starts_with('\n') {
             self.loc.line += 1;
@@ -103,13 +123,13 @@ impl Lexer {
             return self.next_token();
         }
         // grab integers
-        let t: Option<Token> = match_token(r"^\d+", |mat| {
+        let t: Option<Token> = match_token_pattern(r"^\d+", |mat| {
             let int: i32 = mat.parse().unwrap();
             Token::Literal(Literal::IntLiteral(int))
         }).
         // grab quotes
         // TODO: Handle escape characters
-        or_else(|| match_token(r#"^"[^"]*""#, |mat| {
+        or_else(|| match_token_pattern(r#"^"[^"]*""#, |mat| {
             Token::Literal(Literal::StringLiteral(
                 mat.strip_prefix('"')
                     .unwrap()
@@ -118,14 +138,34 @@ impl Lexer {
                     .to_owned(),
             ))
         })).
-        // Assignment `:=`, let, set
-        or_else(|| match_token(r"^:=", |_| Token::ColonEqual)).
-        or_else(|| match_token(r"^let\s", |_| Token::Let)).
-        or_else(|| match_token(r"^set\s", |_| Token::Set)).
-        // all single character tokens (handled by build_simple)
-        or_else(|| match_token(r"^[\(\)<>\+\*/\-,;=]", build_simple)).
+        // let, set
+        or_else(|| match_token_pattern(r"^let\s", |_| Token::Let)).
+        or_else(|| match_token_pattern(r"^set\s", |_| Token::Set)).
         // identifiers
-        or_else(|| match_token(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) }));
+        or_else(|| match_token_pattern(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) })).
+        or_else(|| {
+            for (pattern, token) in [
+                (r"^:=", Token::ColonEqual),
+                (r"^\+\+", Token::PlusPlus),
+                (r"^\(", Token::LeftParen),
+                (r"^\)", Token::RightParen),
+                (r"^<", Token::LeftAngle),
+                (r"^>", Token::RightAngle),
+                (r"^\+", Token::Plus),
+                (r"^-", Token::Minus),
+                (r"^\*", Token::Star),
+                (r"^/", Token::Slash),
+                (r"^,", Token::Comma),
+                (r"^;", Token::Semicolon),
+                (r"^=", Token::Equal),
+            ] {
+                let t = match_token_simple(pattern, token, &text, self);
+                if t.is_some() {
+                    return t;
+                }
+            }
+            None
+        });
 
         return t.ok_or_else(|| {
             LexerError::UnknownToken(
@@ -169,21 +209,4 @@ impl Lexer {
 fn find<'a>(pattern: &str, source: &'a str) -> Option<regex::Match<'a>> {
     let re = Regex::new(pattern).expect("Invalid regular expression");
     re.find(source)
-}
-
-fn build_simple(string: &str) -> Token {
-    match string {
-        "(" => Token::LeftParen,
-        ")" => Token::RightParen,
-        "<" => Token::LeftAngle,
-        ">" => Token::RightAngle,
-        "+" => Token::Plus,
-        "-" => Token::Minus,
-        "*" => Token::Star,
-        "/" => Token::Slash,
-        "," => Token::Comma,
-        ";" => Token::Semicolon,
-        "=" => Token::Equal,
-        _ => panic!("Unreachable"),
-    }
 }

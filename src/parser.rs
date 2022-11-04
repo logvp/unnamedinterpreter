@@ -80,9 +80,14 @@ impl Parser {
             self.consume();
             return Ok(body);
         } else {
-            return Err(
-                ParserError::Error("Expected semicolon at end of statement".to_owned()).into(),
-            );
+            return Err(ParserError::Error(
+                format!(
+                    "Expected semicolon at end of statement, found {:?} instead",
+                    self.token()
+                )
+                .to_owned(),
+            )
+            .into());
         }
     }
 
@@ -142,8 +147,14 @@ impl Parser {
                 ast::Factor::Literal(literal)
             }
             Token::Identifier(name) => {
-                self.consume();
-                ast::Factor::Variable(ast::Identifier { name })
+                if let Token::LeftParen = self.lexer.peek()? {
+                    let x = self.parse_function_call()?;
+                    println!("{:?}", x);
+                    x
+                } else {
+                    self.consume();
+                    ast::Factor::Variable(ast::Identifier { name })
+                }
             }
             _ => Err(ParserError::Error(format!(
                 "unable to parse factor {:?}, {:?}",
@@ -151,6 +162,40 @@ impl Parser {
                 self.lexer.get_all_tokens()
             )))?,
         })
+    }
+
+    fn parse_function_call(&mut self) -> Result<ast::Factor, Error> {
+        if let Token::Identifier(name) = self.token()? {
+            println!("{:?}", self.token()?);
+            self.consume();
+            if let Token::LeftParen = self.token()? {
+                // println!("{:?}", self.token()?);
+                self.consume();
+                let mut args: Vec<ast::Expression> = Default::default();
+                // TODO: this feels too complicated
+                while !self.token()?.kind_eq(&Token::RightParen) {
+                    if let Token::RightParen = self.token()? {
+                        self.consume();
+                        break;
+                    }
+                    args.push(self.parse_expression()?);
+                    if let Token::Comma = self.token()? {
+                        self.consume();
+                        continue;
+                    } else {
+                        if let Token::RightParen = self.token()? {
+                            break;
+                        }
+                        Err(ParserError::Error(
+                            "Expected comma or close parenthesis".to_owned(),
+                        ))?;
+                    }
+                }
+                self.consume();
+                return Ok(ast::Factor::Function(ast::Identifier { name }, args));
+            }
+        }
+        Err(ParserError::Error("Expected function call".to_owned()).into())
     }
 
     fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {
@@ -183,7 +228,7 @@ impl Parser {
     }
 
     fn advance_token(&mut self) -> Result<(), Error> {
-        let loc = self.lexer.loc();
+        // let loc = self.lexer.loc();
         self.token = match self.lexer.next_token() {
             Ok(v) => Some(v),
             Err(LexerError::Eof) => Some(Token::Eof),

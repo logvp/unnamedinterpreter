@@ -50,7 +50,35 @@ impl Interpreter {
 }
 
 type InterpreterReturn = Result<Value, Error>;
-type Context = HashMap<String, Value>;
+// type Context = HashMap<String, Value>;
+
+#[derive(Default, Debug)]
+struct Context {
+    data: HashMap<String, Value>,
+    parent: Option<Box<Self>>,
+}
+impl Context {
+    fn contains(&self, key: &String) -> bool {
+        if self.data.contains_key(key) {
+            true
+        } else {
+            if let Some(ctx) = &self.parent {
+                ctx.contains(key)
+            } else {
+                false
+            }
+        }
+    }
+
+    fn insert(&mut self, key: String, val: Value) -> Option<Value> {
+        self.data.insert(key, val)
+    }
+
+    fn get(&self, key: &String) -> Option<&Value> {
+        self.data.get(key)
+    }
+}
+
 trait Eval {
     fn eval(&self, ctx: &mut Context) -> InterpreterReturn;
 }
@@ -68,7 +96,7 @@ impl Eval for Statement {
     fn eval(&self, ctx: &mut Context) -> InterpreterReturn {
         match self {
             Self::Declaration(lhs, rhs) => {
-                if !ctx.contains_key(&lhs.name) {
+                if !ctx.contains(&lhs.name) {
                     let value = rhs.eval(ctx)?;
                     ctx.insert(lhs.name.clone(), value);
                     Ok(Value::None)
@@ -79,7 +107,7 @@ impl Eval for Statement {
                 }
             }
             Self::Assignment(lhs, rhs) => {
-                if ctx.contains_key(lhs.name()) {
+                if ctx.contains(lhs.name()) {
                     let value = rhs.eval(ctx)?;
                     ctx.insert(lhs.name().clone(), value);
                     Ok(Value::None)
@@ -123,6 +151,7 @@ impl Eval for Factor {
             Self::Expression(expr) => expr.eval(ctx),
             Self::Negate(factor) => factor.eval(ctx),
             Self::Variable(identifier) => identifier.eval(ctx),
+            Self::Function(fun, args) => todo!("Function call not implemented"),
         }
     }
 }
