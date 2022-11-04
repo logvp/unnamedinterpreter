@@ -13,9 +13,11 @@ fn main() -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    const PROGRAM: &str = r#"1 + 
-    
-    2; let x = 14;
+    const PROGRAM: &str = r#"
+    1 +
+
+    2;
+    let x = 14;
     set x = 19;
     "#;
 

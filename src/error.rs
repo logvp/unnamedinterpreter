@@ -15,7 +15,7 @@ impl Display for Loc {
 pub enum Error {
     LexerError(LexerError),
     ParserError(ParserError),
-    InterpreterError(InterpreterError),
+    InterpreterError(RuntimeError),
 }
 impl From<LexerError> for Error {
     fn from(e: LexerError) -> Self {
@@ -27,8 +27,8 @@ impl From<ParserError> for Error {
         Error::ParserError(e)
     }
 }
-impl From<InterpreterError> for Error {
-    fn from(e: InterpreterError) -> Self {
+impl From<RuntimeError> for Error {
+    fn from(e: RuntimeError) -> Self {
         Error::InterpreterError(e)
     }
 }
@@ -58,6 +58,6 @@ pub enum ParserError {
 }
 
 #[derive(Debug)]
-pub enum InterpreterError {
+pub enum RuntimeError {
     Error(String),
 }

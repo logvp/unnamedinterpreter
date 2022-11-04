@@ -23,19 +23,23 @@ impl DerefMut for Ast {
 
 #[derive(Debug)]
 pub enum AstNode {
-    Expression(Expression),
-    // Statement(Statement),
+    // Expression(Expression),
+    Statement(Statement),
 }
 
 /*
 Statement
-: Identifier := Expression ; // use some sort of L-Value rather than Identifier for Vector/Array access
+: let Identifier = Expression ;
+: set Lvalue = Expression ;
+: Identifier := Expression ;
+: Lvalue = Expression ;
 | Expression ;
 ;
 */
 #[derive(Debug)]
 pub enum Statement {
-    Assignment(Identifier, Expression),
+    Declaration(Identifier, Expression),
+    Assignment(Lvalue, Expression),
     Expression(Expression),
 }
 
@@ -81,11 +85,25 @@ pub enum Factor {
     // Identifier(Identifier),
     Expression(Rc<Expression>),
     Negate(Rc<Factor>),
+    Variable(Identifier),
+}
+
+#[derive(Debug)]
+pub enum Lvalue {
+    Identifier(Identifier),
+}
+impl Lvalue {
+    pub fn name(&self) -> &String {
+        match self {
+            Lvalue::Identifier(ident) => &ident.name,
+            _ => panic!("name is only supported for identifiers"),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Identifier {
-    name: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -128,8 +146,8 @@ impl Display for AstNode {
             f,
             "{:width$}",
             match self {
-                AstNode::Expression(e) => e,
-                // AstNode::Statement(s) => s,
+                // AstNode::Expression(e) => e,
+                AstNode::Statement(s) => s,
             },
             width = w + INDENT_INCREASE
         )
@@ -139,9 +157,14 @@ impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Statement::Assignment(i, e) => {
+            Statement::Declaration(i, e) => {
                 writeln!(f, "{:w$}Assignment:", "")?;
                 write!(f, "{:width$}", i, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
+            }
+            Statement::Assignment(l, e) => {
+                writeln!(f, "{:w$}Reassignment:", "")?;
+                write!(f, "{:width$}", l, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
             Statement::Expression(e) => {
@@ -210,6 +233,9 @@ impl Display for Factor {
                 writeln!(f, "{:w$}Negate:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
             }
+            Factor::Variable(i) => {
+                write!(f, "{:w$}", i)?;
+            }
         }
         Ok(())
     }
@@ -228,5 +254,14 @@ impl Display for Identifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         writeln!(f, "{:w$}Identifier(\"{}\")", "", self.name)
+    }
+}
+impl Display for Lvalue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = if let Some(n) = f.width() { n } else { 0 };
+        match self {
+            Lvalue::Identifier(n) => writeln!(f, "{:w$}", n)?,
+        }
+        Ok(())
     }
 }

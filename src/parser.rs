@@ -20,14 +20,72 @@ impl Parser {
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
         let mut ast: ast::Ast = Default::default();
         while self.lexer.has_next() {
-            ast.push(ast::AstNode::Expression(self.parse_expression()?));
+            // println!("{:?}", self.lexer.peek_rest());
+            ast.push(ast::AstNode::Statement(self.parse_statement()?));
         }
         Ok(ast)
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, Error> {
         // println!("parsing statement");
-        todo!()
+        let body = match self.token()? {
+            Token::Let => {
+                self.consume();
+                let identifier = self.parse_identifier()?;
+                if let Token::Equal = self.token()? {
+                    self.consume();
+                    ast::Statement::Declaration(identifier, self.parse_expression()?)
+                } else {
+                    return Err(ParserError::Error(
+                        "Expected equal sign after let identifier construct".to_owned(),
+                    )
+                    .into());
+                }
+            }
+            Token::Set => {
+                self.consume();
+                let lvalue = self.parse_lvalue()?;
+                if let Token::Equal = self.token()? {
+                    self.consume();
+                    ast::Statement::Assignment(lvalue, self.parse_expression()?)
+                } else {
+                    return Err(ParserError::Error(
+                        "Expected equal sign after set identifier construct".to_owned(),
+                    )
+                    .into());
+                }
+            }
+            _ => {
+                if let Token::Identifier(_) = self.token()? {
+                    if let Ok(Token::Equal) = self.lexer.peek() {
+                        let lvalue = self.parse_lvalue()?;
+                        // consume `=`
+                        self.token()?;
+                        self.consume();
+                        return Ok(ast::Statement::Assignment(lvalue, self.parse_expression()?));
+                    }
+                    if let Ok(Token::ColonEqual) = self.lexer.peek() {
+                        let lvalue = self.parse_identifier()?;
+                        // consume `:=`
+                        self.token()?;
+                        self.consume();
+                        return Ok(ast::Statement::Declaration(
+                            lvalue,
+                            self.parse_expression()?,
+                        ));
+                    }
+                }
+                ast::Statement::Expression(self.parse_expression()?)
+            }
+        };
+        if let Token::Semicolon = self.token()? {
+            self.consume();
+            return Ok(body);
+        } else {
+            return Err(
+                ParserError::Error("Expected semicolon at end of statement".to_owned()).into(),
+            );
+        }
     }
 
     fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
@@ -85,12 +143,29 @@ impl Parser {
                 self.consume();
                 ast::Factor::Literal(literal)
             }
+            Token::Identifier(name) => {
+                self.consume();
+                ast::Factor::Variable(ast::Identifier { name })
+            }
             _ => Err(ParserError::Error(format!(
                 "unable to parse factor {:?}, {:?}",
                 self.token(),
                 self.lexer.get_all_tokens()
             )))?,
         })
+    }
+
+    fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {
+        Ok(ast::Lvalue::Identifier(self.parse_identifier()?))
+    }
+
+    fn parse_identifier(&mut self) -> Result<ast::Identifier, Error> {
+        if let Token::Identifier(name) = self.token()? {
+            self.consume();
+            Ok(ast::Identifier { name })
+        } else {
+            Err(ParserError::Error("Expected identifier name".to_owned()).into())
+        }
     }
 
     fn token(&mut self) -> Result<Token, Error> {
@@ -110,12 +185,13 @@ impl Parser {
     }
 
     fn advance_token(&mut self) -> Result<(), Error> {
-        // println!("{:?}", self.lexer.loc());
+        let loc = self.lexer.loc();
         self.token = match self.lexer.next_token() {
             Ok(v) => Some(v),
             Err(LexerError::Eof) => Some(Token::Eof),
             Err(e) => Err(e)?,
         };
+        // println!("{:?} {:?}", self.token, loc);
         Ok(())
     }
 }

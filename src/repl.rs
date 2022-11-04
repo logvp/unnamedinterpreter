@@ -49,37 +49,9 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         fn help<O: Write>(output: &mut O) -> io::Result<()> {
             writeln!(
                 output,
-"REPL: Language help; For REPL help type `.REPL`
-    All keywords of Blang:
-    (KEYWORD - Args -> Return)
-        ADD - Numeric Numeric -> Numeric
-            Adds two numeric values
-        SUB - Numeric Numeric -> Numeric
-            Subtracts two numeric values
-        MUL - Numeric Numeric -> Numeric
-            Multiplies two numeric values
-        DIV - Numeric Numeric -> Numeric
-            Divides two numeric values
-        MOD - Numeric Numeric -> Numeric
-            Modulus of two numeric values
-        CAT - String String -> String
-            Concatenates two strings
-        LET - Identifier Value -> None
-            Defines a variable with a name and value. Value can be an expression that will be evaluated
-        SET - Identifier Value -> None
-            Updates the value of a variable that has been previously defined
-        DEL - Identifier -> None
-            Deletes a variable
-        FOR - Numeric [*]... END -> None
-            Repeats instructions N times
-        DEF - Identifier [*]... END -> None
-            Defines macro that will expand into the rest of the arguments
-        DIS - Value -> None
-            Prints the value of its argument to the console
-        STR - [Numeric|String]... -> String
-            Creates a string literal out of text and numbers. Cannot contain any keywords and any whitespace will be converted into one space character
-        DBG - None -> None
-            Prints the state of the current command queue"
+                "REPL: Language help; For REPL help type `.REPL`
+    unnamedinterpreter
+        TODO: help page"
             )?;
             Ok(())
         }
@@ -127,7 +99,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
 
             for ret in result {
                 match ret {
-                    Ok(v) => writeln!(self.output, "{:?}", v)?,
+                    Ok(v) => writeln!(self.output, "OK: {:?}", v)?,
                     Err(e) => writeln!(self.output, "ERROR: {:?}", e)?,
                 }
             }
@@ -150,7 +122,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
 
             for ret in result {
                 match ret {
-                    Ok(v) => writeln!(self.output, "{:?}", v)?,
+                    Ok(v) => writeln!(self.output, "OK: {:?}", v)?,
                     Err(e) => writeln!(self.output, "ERROR: {:?}", e)?,
                 }
             }

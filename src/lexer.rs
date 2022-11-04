@@ -13,6 +13,7 @@ pub enum Token {
     LeftAngle,
     RightAngle,
     Plus,
+    PlusPlus,
     Minus,
     Star,
     Slash,
@@ -48,13 +49,20 @@ impl Lexer {
     }
 
     pub fn has_next(&self) -> bool {
-        self.cursor < self.text.len()
+        self.cursor < self.text.trim_end().len()
     }
 
     fn move_cursor(&mut self, update: usize) {
         self.cursor += update;
-        self.loc.col += update;
+        self.loc.col += update; // TODO: Doesn't handle newlines
     }
+
+    // Proxy for debugging purposes
+    // pub fn next_token(&mut self) -> Result<Token, LexerError> {
+    //     let r = self.debug_next_token();
+    //     println!("TOKEN: {:?}", r);
+    //     r
+    // }
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         if !self.has_next() {
@@ -67,12 +75,13 @@ impl Lexer {
         }
         // text = string[cursor:]
         let text: String = self.text.split_at(self.cursor).1.to_owned();
+        // println!("STRING: \"{}\"", text.trim_end());
         if text.len() == 0 {
             return Err(LexerError::Eof);
         }
         let mut match_token = |pattern, fun: fn(&str) -> Token| {
             if let Some(mat) = find(pattern, &text) {
-                self.loc.line += 1;
+                // self.loc.line += 1; // TODO: this is not right lol
                 let delta = mat.end();
                 self.move_cursor(delta);
                 Some(fun(mat.as_str()))
@@ -100,7 +109,7 @@ impl Lexer {
         }).
         // grab quotes
         // TODO: Handle escape characters
-        or(match_token(r#"^"[^"]*""#, |mat| {
+        or_else(|| match_token(r#"^"[^"]*""#, |mat| {
             Token::Literal(Literal::StringLiteral(
                 mat.strip_prefix('"')
                     .unwrap()
@@ -110,21 +119,24 @@ impl Lexer {
             ))
         })).
         // Assignment `:=`, let, set
-        or(match_token(r"^:=", |_| Token::ColonEqual)).
-        or(match_token(r"^let", |_| Token::Let)).
-        or(match_token(r"^set", |_| Token::Set)).
+        or_else(|| match_token(r"^:=", |_| Token::ColonEqual)).
+        or_else(|| match_token(r"^let\s", |_| Token::Let)).
+        or_else(|| match_token(r"^set\s", |_| Token::Set)).
         // all single character tokens (handled by build_simple)
-        or(match_token(r"^[\(\)<>\+\*/\-,;=]", |mat| build_simple(mat))).
-        or(match_token(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned())}));
+        or_else(|| match_token(r"^[\(\)<>\+\*/\-,;=]", build_simple)).
+        // identifiers
+        or_else(|| match_token(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) }));
 
-        return t.ok_or(LexerError::UnknownToken(
-            if let Some(mat) = find(r"[^\s]+", &text) {
-                mat.as_str().to_owned()
-            } else {
-                text.chars().take(MAX_SNIPPET_LENGTH).collect()
-            },
-            self.loc,
-        ));
+        return t.ok_or_else(|| {
+            LexerError::UnknownToken(
+                if let Some(mat) = find(r"[^\s]+", &text) {
+                    mat.as_str().to_owned()
+                } else {
+                    text.chars().take(MAX_SNIPPET_LENGTH).collect()
+                },
+                self.loc,
+            )
+        });
     }
 
     pub fn get_all_tokens(&mut self) -> Result<Vec<Token>, LexerError> {
