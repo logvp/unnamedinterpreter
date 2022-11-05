@@ -99,8 +99,8 @@ impl<I: BufRead, O: Write> Repl<I, O> {
 
             for ret in result {
                 match ret {
-                    Ok(v) => writeln!(self.output, "OK: {:?}", v)?,
-                    Err(e) => writeln!(self.output, "ERROR: {:?}", e)?,
+                    Ok(v) => writeln!(self.output, ": {:?}", v)?,
+                    Err(e) => writeln!(self.output, ": ERROR : {:?}", e)?,
                 }
             }
         }
@@ -122,8 +122,8 @@ impl<I: BufRead, O: Write> Repl<I, O> {
 
             for ret in result {
                 match ret {
-                    Ok(v) => writeln!(self.output, "OK: {:?}", v)?,
-                    Err(e) => writeln!(self.output, "ERROR: {:?}", e)?,
+                    Ok(v) => writeln!(self.output, ": {:?}", v)?,
+                    Err(e) => writeln!(self.output, ": ERROR : {:?}", e)?,
                 }
             }
         }

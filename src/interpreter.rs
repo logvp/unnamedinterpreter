@@ -1,18 +1,30 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
 use crate::ast::*;
 use crate::error::{Error, RuntimeError};
 use crate::parser::Parser;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Function(Rc<FunctionType>),
+    Function { func: Rc<FunctionType> },
     Int(i32),
     String(String),
     None,
+}
+
+impl Display for RuntimeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Function { .. } => write!(f, "FunctionObject"),
+            Self::Int(int) => write!(f, "{}", int),
+            Self::String(string) => write!(f, "{}", string),
+            Self::None => write!(f, "NoneType"),
+        }
+    }
 }
 
 impl RuntimeValue {
@@ -26,9 +38,19 @@ impl RuntimeValue {
         }
     }
 
+    fn string(&self) -> Result<&String, RuntimeError> {
+        if let Self::String(s) = self {
+            Ok(s)
+        } else {
+            Err(RuntimeError::Error(
+                format!("Expected integer type, found {} instead", self.get_type()).to_owned(),
+            ))
+        }
+    }
+
     fn get_type(&self) -> &'static str {
         match self {
-            RuntimeValue::Function(_) => "Function",
+            RuntimeValue::Function { .. } => "Function",
             RuntimeValue::Int(_) => "Int",
             RuntimeValue::String(_) => "String",
             RuntimeValue::None => "NoneType",
@@ -52,6 +74,7 @@ enum FunctionType {
 enum IntrinsicFunction {
     Print,
     TypeOf,
+    Debug,
 }
 
 pub struct Interpreter {
@@ -83,9 +106,8 @@ impl Interpreter {
 }
 
 type InterpreterReturn = Result<RuntimeValue, Error>;
-// type Context = HashMap<String, Value>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Context {
     data: RefCell<HashMap<String, RuntimeValue>>,
     parent: Option<Rc<Self>>,
@@ -98,15 +120,27 @@ impl Context {
         };
         global.insert(
             "print".to_string(),
-            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
-                kind: IntrinsicFunction::Print,
-            })),
+            RuntimeValue::Function {
+                func: Rc::new(FunctionType::Intrinsic {
+                    kind: IntrinsicFunction::Print,
+                }),
+            },
         );
         global.insert(
             "typeof".to_string(),
-            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
-                kind: IntrinsicFunction::TypeOf,
-            })),
+            RuntimeValue::Function {
+                func: Rc::new(FunctionType::Intrinsic {
+                    kind: IntrinsicFunction::TypeOf,
+                }),
+            },
+        );
+        global.insert(
+            "debug".to_string(),
+            RuntimeValue::Function {
+                func: Rc::new(FunctionType::Intrinsic {
+                    kind: IntrinsicFunction::Debug,
+                }),
+            },
         );
 
         global
@@ -158,6 +192,17 @@ impl Context {
     }
 }
 
+impl Debug for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Context {{ identifiers: {:?}, parent: {:?} }}",
+            self.data.borrow().keys(),
+            self.parent
+        )
+    }
+}
+
 trait Eval {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn;
 }
@@ -189,7 +234,8 @@ impl Eval for Statement {
             Self::Assignment(lhs, rhs) => {
                 if ctx.contains(lhs.name()) {
                     let value = rhs.eval(ctx.clone())?;
-                    ctx.insert(lhs.name().clone(), value);
+                    ctx.update(lhs.name().clone(), value)
+                        .expect("could not update value");
                     Ok(RuntimeValue::None)
                 } else {
                     Err(RuntimeError::Error(
@@ -227,6 +273,11 @@ impl Eval for Term {
             Self::Divide(lhs, rhs) => {
                 RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?)
             }
+            Self::Concatenate(lhs, rhs) => RuntimeValue::String(format!(
+                "{}{}",
+                lhs.eval(ctx.clone())?.string()?,
+                rhs.eval(ctx.clone())?.string()?
+            )),
             Self::Factor(factor) => factor.eval(ctx.clone())?,
         })
     }
@@ -239,22 +290,22 @@ impl Eval for Factor {
             Self::Expression(expr) => expr.eval(ctx.clone()),
             Self::Negate(factor) => factor.eval(ctx.clone()),
             Self::Variable(identifier) => identifier.eval(ctx.clone()),
-            Self::Lambda(param, body) => {
-                Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda {
+            Self::Lambda(param, body) => Ok(RuntimeValue::Function {
+                func: Rc::new(FunctionType::Lambda {
                     parent_scope: ctx,
                     parameters: param.to_owned(),
                     body: body.to_owned(),
-                })))
-            }
+                }),
+            }),
             Self::FunctionCall(fun, args) => match fun.eval(ctx.clone())? {
-                RuntimeValue::Function(function) => match function.borrow() {
+                RuntimeValue::Function { func: function } => match function.borrow() {
                     FunctionType::Lambda {
                         parent_scope,
                         parameters,
                         body,
                     } => {
                         let scope = Context::new(parent_scope.clone());
-                        if (parameters.len() != args.len()) {
+                        if parameters.len() != args.len() {
                             Err(RuntimeError::Error(format!(
                                 "Function expects {} argument but {} were provided",
                                 parameters.len(),
@@ -274,7 +325,7 @@ impl Eval for Factor {
                     FunctionType::Intrinsic { kind } => match kind {
                         IntrinsicFunction::Print => {
                             for arg in args {
-                                print!("{:?} ", arg.eval(ctx.clone())?)
+                                print!("{} ", arg.eval(ctx.clone())?)
                             }
                             println!("");
                             Ok(RuntimeValue::None)
@@ -291,6 +342,13 @@ impl Eval for Factor {
                                     args[0].eval(ctx.clone())?.get_type().to_owned(),
                                 ))
                             }
+                        }
+                        IntrinsicFunction::Debug => {
+                            for arg in args {
+                                print!("{:?} ", arg.eval(ctx.clone())?)
+                            }
+                            println!("");
+                            Ok(RuntimeValue::None)
                         }
                     },
                 },

@@ -18,7 +18,7 @@ impl Parser {
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
         let mut ast: ast::Ast = Default::default();
         while self.lexer.has_next() {
-            // println!("{:?}", self.lexer.peek_rest());
+            // // println!("{:?}", self.lexer.peek_rest());
             ast.push(self.parse_ast_node()?);
         }
         Ok(ast)
@@ -58,26 +58,26 @@ impl Parser {
                 }
             }
             _ => {
+                // Simple Assignment ( = )
                 if let Token::Identifier(_) = self.token()? {
                     if let Ok(Token::Equal) = self.lexer.peek() {
                         let lvalue = self.parse_lvalue()?;
-                        // consume `=`
                         self.token()?;
                         self.consume();
-                        return Ok(ast::Statement::Assignment(lvalue, self.parse_expression()?));
+                        ast::Statement::Assignment(lvalue, self.parse_expression()?)
                     }
-                    if let Ok(Token::ColonEqual) = self.lexer.peek() {
+                    // Simple Declaration ( := )
+                    else if let Ok(Token::ColonEqual) = self.lexer.peek() {
                         let lvalue = self.parse_identifier()?;
-                        // consume `:=`
                         self.token()?;
                         self.consume();
-                        return Ok(ast::Statement::Declaration(
-                            lvalue,
-                            self.parse_expression()?,
-                        ));
+                        ast::Statement::Declaration(lvalue, self.parse_expression()?)
+                    } else {
+                        ast::Statement::Expression(self.parse_expression()?)
                     }
+                } else {
+                    ast::Statement::Expression(self.parse_expression()?)
                 }
-                ast::Statement::Expression(self.parse_expression()?)
             }
         };
         if let Token::Semicolon = self.token()? {
@@ -123,6 +123,10 @@ impl Parser {
                 self.consume();
                 ast::Term::Divide(lhs, Box::new(self.parse_term()?))
             }
+            Token::PlusPlus => {
+                self.consume();
+                ast::Term::Concatenate(lhs, Box::new(self.parse_term()?))
+            }
             _ => ast::Term::Factor(lhs),
         })
     }
@@ -154,7 +158,7 @@ impl Parser {
             Token::Identifier(name) => {
                 if let Token::LeftParen = self.lexer.peek()? {
                     let x = self.parse_function_call()?;
-                    // println!("{:?}", x);
+                    // // println!("{:?}", x);
                     x
                 } else {
                     self.consume();
@@ -198,6 +202,7 @@ impl Parser {
             )
             .into());
         }
+        // println!("got lambda keyword");
         self.consume();
         let mut params: Vec<ast::Identifier> = Default::default();
         if !self.token()?.kind_eq(&Token::LeftParen) {
@@ -226,18 +231,20 @@ impl Parser {
             }
         }
         self.consume();
+        // println!("got arg list");
 
         let block = self.parse_block()?;
+        // println!("got block");
 
         Ok(ast::Factor::Lambda(params, block))
     }
 
     fn parse_function_call(&mut self) -> Result<ast::Factor, Error> {
         if let Token::Identifier(name) = self.token()? {
-            // println!("{:?}", self.token()?);
+            // // println!("{:?}", self.token()?);
             self.consume();
             if let Token::LeftParen = self.token()? {
-                // println!("{:?}", self.token()?);
+                // // println!("{:?}", self.token()?);
                 self.consume();
                 let mut args: Vec<ast::Expression> = Default::default();
                 // TODO: this feels too complicated
@@ -302,7 +309,7 @@ impl Parser {
             Err(LexerError::Eof) => Some(Token::Eof),
             Err(e) => Err(e)?,
         };
-        // println!("{:?} {:?}", self.token, loc);
+        // // println!("{:?} {:?}", self.token, loc);
         Ok(())
     }
 }

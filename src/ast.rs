@@ -65,6 +65,7 @@ pub enum Expression {
 Term
 : Factor * Term
 | Factor / Term
+| Factor ++ Term
 | Factor
 ;
 */
@@ -72,6 +73,7 @@ Term
 pub enum Term {
     Multiply(Factor, Box<Term>),
     Divide(Factor, Box<Term>),
+    Concatenate(Factor, Box<Term>),
     Factor(Factor),
 }
 
@@ -201,6 +203,11 @@ impl Display for Term {
             }
             Term::Divide(fac, t) => {
                 writeln!(f, "{:w$}Divide:", "")?;
+                write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
+            }
+            Term::Concatenate(fac, t) => {
+                writeln!(f, "{:w$}Concatenate:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
             }
