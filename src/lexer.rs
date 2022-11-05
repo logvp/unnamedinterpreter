@@ -27,6 +27,7 @@ pub enum Token {
     Semicolon,
     Let,
     Set,
+    Lambda,
     Eof,
 }
 impl Token {
@@ -142,11 +143,13 @@ impl Lexer {
                     .to_owned(),
             ))
         })).
-        // let, set
+        // keywords
         or_else(|| match_token_pattern(r"^let\s", |_| Token::Let)).
         or_else(|| match_token_pattern(r"^set\s", |_| Token::Set)).
+        or_else(|| match_token_pattern(r"^lambda\s", |_| Token::Lambda)).
         // identifiers
         or_else(|| match_token_pattern(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) })).
+        // anything else that couldn't be confused for an identifier
         or_else(|| {
             for (pattern, token) in [
                 (r"^:=", Token::ColonEqual),

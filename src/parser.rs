@@ -19,9 +19,13 @@ impl Parser {
         let mut ast: ast::Ast = Default::default();
         while self.lexer.has_next() {
             // println!("{:?}", self.lexer.peek_rest());
-            ast.push(ast::AstNode::Statement(self.parse_statement()?));
+            ast.push(self.parse_ast_node()?);
         }
         Ok(ast)
+    }
+
+    fn parse_ast_node(&mut self) -> Result<ast::AstNode, Error> {
+        Ok(ast::AstNode::Statement(self.parse_statement()?))
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, Error> {
@@ -128,6 +132,7 @@ impl Parser {
         // println!("rest: {:?}", self.lexer.peek_rest());
         Ok(match self.token()? {
             // Token::Identifier(id) => {self.advance_token();ast::Factor(ast::Identifier(id))},
+            Token::Lambda => self.parse_lambda_expression()?,
             Token::LeftParen => {
                 self.consume();
                 let parenthesized = self.parse_expression()?;
@@ -164,6 +169,69 @@ impl Parser {
         })
     }
 
+    fn parse_block(&mut self) -> Result<ast::Block, Error> {
+        if !self.token()?.kind_eq(&Token::LeftBrace) {
+            return Err(ParserError::Error(
+                format!(
+                    "Expected block beginning with `{{` found {:?}",
+                    self.token()?
+                )
+                .to_owned(),
+            )
+            .into());
+        }
+        self.consume();
+        let mut block: Vec<ast::AstNode> = Default::default();
+        while !self.token()?.kind_eq(&Token::RightBrace) {
+            block.push(self.parse_ast_node()?);
+        }
+        self.consume();
+
+        Ok(ast::Block(block))
+    }
+
+    fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
+        if !self.token()?.kind_eq(&Token::Lambda) {
+            return Err(ParserError::Error(
+                "Attempted to parse lambda expression but failed to find keyworld `lambda`"
+                    .to_owned(),
+            )
+            .into());
+        }
+        self.consume();
+        let mut params: Vec<ast::Identifier> = Default::default();
+        if !self.token()?.kind_eq(&Token::LeftParen) {
+            return Err(ParserError::Error(
+                "Expected parameter list after keyworld `lambda`".to_owned(),
+            )
+            .into());
+        }
+        self.consume();
+        // TODO: this feels too complicated
+        while !self.token()?.kind_eq(&Token::RightParen) {
+            if let Token::RightParen = self.token()? {
+                self.consume();
+                break;
+            }
+            params.push(self.parse_identifier()?);
+            if let Token::Comma = self.token()? {
+                self.consume();
+                continue;
+            } else if let Token::RightParen = self.token()? {
+                break;
+            } else {
+                return Err(
+                    ParserError::Error("Expected comma or close parenthesis".to_owned()).into(),
+                );
+            }
+        }
+        self.consume();
+
+        let block = self.parse_block()?;
+
+        Ok(ast::Factor::Lambda(params, block))
+    }
+
     fn parse_function_call(&mut self) -> Result<ast::Factor, Error> {
         if let Token::Identifier(name) = self.token()? {
             // println!("{:?}", self.token()?);
@@ -192,7 +260,7 @@ impl Parser {
                     }
                 }
                 self.consume();
-                return Ok(ast::Factor::Function(ast::Identifier { name }, args));
+                return Ok(ast::Factor::FunctionCall(ast::Identifier { name }, args));
             }
         }
         Err(ParserError::Error("Expected function call".to_owned()).into())

@@ -20,11 +20,15 @@ impl DerefMut for Ast {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstNode {
     // Expression(Expression),
     Statement(Statement),
+    // Block(Block),
 }
+
+#[derive(Debug, Clone)]
+pub struct Block(pub Vec<AstNode>);
 
 /*
 Statement
@@ -35,7 +39,7 @@ Statement
 | Expression ;
 ;
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Declaration(Identifier, Expression),
     Assignment(Lvalue, Expression),
@@ -44,12 +48,13 @@ pub enum Statement {
 
 /*
 Expression
+: lambda (Args) { body }
 : Term + Expression
 | Term - Expression
 | Term
 ;
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Add(Term, Box<Expression>),
     Subtract(Term, Box<Expression>),
@@ -63,7 +68,7 @@ Term
 | Factor
 ;
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Term {
     Multiply(Factor, Box<Term>),
     Divide(Factor, Box<Term>),
@@ -78,16 +83,17 @@ Factor
 | - Factor
 ;
 */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Factor {
     Literal(Literal),
     Expression(Box<Expression>),
     Negate(Box<Factor>),
     Variable(Identifier),
-    Function(Identifier, Vec<Expression>), // hold Expression not identifier ( will change parsing ':(' )
+    Lambda(Vec<Identifier>, Block),
+    FunctionCall(Identifier, Vec<Expression>), // TODO: hold Expression not identifier ( will change parsing ':(' )
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Lvalue {
     Identifier(Identifier),
 }
@@ -100,7 +106,7 @@ impl Lvalue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier {
     pub name: String,
 }
@@ -110,22 +116,6 @@ pub enum Literal {
     IntLiteral(i32),
     StringLiteral(String),
 }
-
-/*
-pub enum Token {
-    Literal(Literal),
-    LeftParen,
-    RightParen,
-    LeftAngle,
-    RightAngle,
-    Plus,
-    Minus,
-    Star,
-    Slash,
-    Comma,
-    Eof,
-}
- */
 
 const INDENT_INCREASE: usize = 2;
 impl Display for Ast {
@@ -141,15 +131,21 @@ impl Display for AstNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         writeln!(f, "{:w$}AstNode:", "")?;
-        write!(
-            f,
-            "{:width$}",
-            match self {
-                // AstNode::Expression(e) => e,
-                AstNode::Statement(s) => s,
-            },
-            width = w + INDENT_INCREASE
-        )
+        match self {
+            // AstNode::Expression(e) => e,
+            AstNode::Statement(s) => write!(f, "{:width$}", s, width = w + INDENT_INCREASE),
+            // AstNode::Block(b) => write!(f, "{:width$}", b, width = w + INDENT_INCREASE),
+        }
+    }
+}
+impl Display for Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = if let Some(n) = f.width() { n } else { 0 };
+        writeln!(f, "{:w$}Block:", "")?;
+        for line in self.0.iter() {
+            write!(f, "{:width$}", line, width = w + INDENT_INCREASE)?
+        }
+        Ok(())
     }
 }
 impl Display for Statement {
@@ -235,17 +231,17 @@ impl Display for Factor {
             Factor::Variable(i) => {
                 write!(f, "{:w$}", i)?;
             }
-            Factor::Function(fun, args) => {
-                let mut first = true;
+            Factor::FunctionCall(fun, args) => {
                 write!(f, "{:w$}(", fun)?;
-                for arg in args {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", arg)?;
-                    first = false;
-                }
+                write_comma_separated(f, args)?;
                 write!(f, ")")?;
+            }
+            Factor::Lambda(args, body) => {
+                writeln!(f, "{:w$}Lambda:", "")?;
+                write!(f, "{:width$}(", "", width = w + INDENT_INCREASE)?;
+                write_comma_separated(f, args)?;
+                writeln!(f, ")")?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
         }
         Ok(())
@@ -275,4 +271,19 @@ impl Display for Lvalue {
         }
         Ok(())
     }
+}
+
+fn write_comma_separated<T: Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    list: &Vec<T>,
+) -> std::fmt::Result {
+    let mut first = true;
+    for arg in list {
+        if !first {
+            write!(f, ", ")?;
+        }
+        write!(f, "{}", arg)?;
+        first = false;
+    }
+    Ok(())
 }
