@@ -28,6 +28,15 @@ pub enum Token {
     Let,
     Set,
     Lambda,
+    While,
+    If,
+    Else,
+    EqualEqual,
+    LessEqual,
+    GreaterEqual,
+    SlashEqual,
+    Tilde,
+    Question,
     Eof,
 }
 impl Token {
@@ -144,14 +153,23 @@ impl Lexer {
             ))
         })).
         // keywords
-        or_else(|| match_token_pattern(r"^let\s", |_| Token::Let)).
-        or_else(|| match_token_pattern(r"^set\s", |_| Token::Set)).
-        or_else(|| match_token_pattern(r"^lambda\s", |_| Token::Lambda)).
+        or_else(|| match_token_pattern(r"^let\b", |_| Token::Let)).
+        or_else(|| match_token_pattern(r"^set\b", |_| Token::Set)).
+        or_else(|| match_token_pattern(r"^while\b", |_| Token::While)).
+        or_else(|| match_token_pattern(r"^if\b", |_| Token::If)).
+        or_else(|| match_token_pattern(r"^else\b", |_| Token::Else)).
+        or_else(|| match_token_pattern(r"^lambda\b", |_| Token::Lambda)).
+        or_else(|| match_token_pattern(r"^true\b", |_| Token::Literal(Literal::BooleanLiteral(true)))).
+        or_else(|| match_token_pattern(r"^false\b", |_| Token::Literal(Literal::BooleanLiteral(false)))).
         // identifiers
         or_else(|| match_token_pattern(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) })).
         // anything else that couldn't be confused for an identifier
         or_else(|| {
             for (pattern, token) in [
+                (r"^==", Token::EqualEqual),
+                (r"^/=", Token::SlashEqual),
+                (r"^>=", Token::GreaterEqual),
+                (r"^<=", Token::LessEqual),
                 (r"^:=", Token::ColonEqual),
                 (r"^\+\+", Token::PlusPlus),
                 (r"^\(", Token::LeftParen),
@@ -166,6 +184,9 @@ impl Lexer {
                 (r"^-", Token::Minus),
                 (r"^\*", Token::Star),
                 (r"^/", Token::Slash),
+                // (r"^\\", Token::Backslash),
+                (r"^~", Token::Tilde),
+                (r"^\?", Token::Question),
                 (r"^,", Token::Comma),
                 (r"^;", Token::Semicolon),
                 (r"^=", Token::Equal),

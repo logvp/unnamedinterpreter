@@ -27,7 +27,7 @@ pub enum AstNode {
     // Block(Block),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Block(pub Vec<AstNode>);
 
 /*
@@ -44,13 +44,16 @@ pub enum Statement {
     Declaration(Identifier, Expression),
     Assignment(Lvalue, Expression),
     Expression(Expression),
+    While(Expression, Block),
+    IfElse(Expression, Block, Block),
 }
 
 /*
 Expression
 : lambda (Args) { body }
-: Term + Expression
+| Term + Expression
 | Term - Expression
+| Term Comparison Expression
 | Term
 ;
 */
@@ -58,7 +61,17 @@ Expression
 pub enum Expression {
     Add(Term, Box<Expression>),
     Subtract(Term, Box<Expression>),
+    Compare(Term, Box<Expression>, Comparison),
     Term(Term),
+}
+#[derive(Debug, Clone)]
+pub enum Comparison {
+    GreaterThan,
+    LessThan,
+    GreaterEqual,
+    LessEqual,
+    Equal,
+    NotEqual,
 }
 
 /*
@@ -100,10 +113,10 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> Option<&String> {
         match self {
-            Lvalue::Identifier(ident) => &ident.name,
-            _ => panic!("name is only supported for identifiers"),
+            Lvalue::Identifier(ident) => Some(&ident.name),
+            _ => None,
         }
     }
 }
@@ -117,6 +130,7 @@ pub struct Identifier {
 pub enum Literal {
     IntLiteral(i32),
     StringLiteral(String),
+    BooleanLiteral(bool),
 }
 
 const INDENT_INCREASE: usize = 2;
@@ -164,6 +178,17 @@ impl Display for Statement {
                 write!(f, "{:width$}", l, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
+            Statement::While(cond, body) => {
+                writeln!(f, "{:w$}While:", "")?;
+                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+            }
+            Statement::IfElse(cond, body, else_) => {
+                writeln!(f, "{:w$}IfElse:", "")?;
+                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", else_, width = w + INDENT_INCREASE)?;
+            }
             Statement::Expression(e) => {
                 write!(f, "{:w$}", e)?;
             }
@@ -187,6 +212,11 @@ impl Display for Expression {
             }
             Expression::Term(term) => {
                 write!(f, "{:w$}", term)?;
+            }
+            Expression::Compare(t, e, op) => {
+                writeln!(f, "{:w$}Comparison ({:?}):", "", op)?;
+                write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
         }
         Ok(())
@@ -239,15 +269,18 @@ impl Display for Factor {
                 write!(f, "{:w$}", i)?;
             }
             Factor::FunctionCall(fun, args) => {
-                write!(f, "{:w$}(", fun)?;
-                write_comma_separated(f, args)?;
-                write!(f, ")")?;
+                writeln!(f, "{:w$}FunctionCall:", "")?;
+                write!(f, "{:width$}", fun, width = w + INDENT_INCREASE)?;
+                writeln!(f, "{:width$}Args:", "", width = w + INDENT_INCREASE)?;
+                for arg in args {
+                    write!(f, "{:width$}", arg, width = w + 2 * INDENT_INCREASE)?;
+                }
             }
             Factor::Lambda(args, body) => {
                 writeln!(f, "{:w$}Lambda:", "")?;
-                write!(f, "{:width$}(", "", width = w + INDENT_INCREASE)?;
-                write_comma_separated(f, args)?;
-                writeln!(f, ")")?;
+                for arg in args {
+                    write!(f, "{:width$}", arg, width = w + INDENT_INCREASE)?;
+                }
                 write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
         }
@@ -257,11 +290,13 @@ impl Display for Factor {
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
-        match self {
-            Literal::IntLiteral(n) => writeln!(f, "{:w$}IntLiteral({})", "", n)?,
-            Literal::StringLiteral(n) => writeln!(f, "{:w$}StringLiteral({})", "", n)?,
-        }
-        Ok(())
+        // match self {
+        //     Literal::IntLiteral(n) => writeln!(f, "{:w$}IntLiteral({})", "", n)?,
+        //     Literal::StringLiteral(n) => writeln!(f, "{:w$}StringLiteral({})", "", n)?,
+        //     Literal::BooleanLiteral(n) => writeln!(f, "{:w$}BooleanLiteral({})", "", n)?,
+        // }
+        // Ok(())
+        writeln!(f, "{:w$}{:?}", "", self)
     }
 }
 impl Display for Identifier {
@@ -278,19 +313,4 @@ impl Display for Lvalue {
         }
         Ok(())
     }
-}
-
-fn write_comma_separated<T: Display>(
-    f: &mut std::fmt::Formatter<'_>,
-    list: &Vec<T>,
-) -> std::fmt::Result {
-    let mut first = true;
-    for arg in list {
-        if !first {
-            write!(f, ", ")?;
-        }
-        write!(f, "{}", arg)?;
-        first = false;
-    }
-    Ok(())
 }

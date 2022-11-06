@@ -14,19 +14,15 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     const PROGRAM: &str = r#"
-    1 +
-
-    2;
-    let x = 14;
-    set x = 19;
+    x := 15;
+    if (x > 10) { print("success!"); } else { print("failure"); };
     "#;
 
     #[test]
     fn lexer() {
         use crate::lexer::Lexer;
         let mut lexer = Lexer::new(PROGRAM.to_owned());
-        println!("--- Tokens ---");
-        println!("{:?}", lexer.get_all_tokens().unwrap());
+        println!("--- Tokens ---\n{:?}", lexer.get_all_tokens().unwrap());
     }
 
     #[test]
@@ -34,8 +30,7 @@ mod tests {
         use crate::parser::Parser;
         let mut parser = Parser::new(PROGRAM.to_owned());
         let ast = parser.gen_ast().unwrap();
-        println!("--- AST ---");
-        println!("{}", ast);
+        println!("--- AST ---\n{}", ast);
     }
 
     #[test]
@@ -45,10 +40,7 @@ mod tests {
         let ret = interpreter.interpret(PROGRAM.to_owned());
         println!("--- Results ---");
         for v in ret {
-            match v {
-                Ok(val) => println!("{:?}", val),
-                Err(e) => panic!("{:?}", e),
-            }
+            println!("OK: {:?}", v.unwrap())
         }
     }
 }

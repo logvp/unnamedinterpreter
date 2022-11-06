@@ -57,24 +57,40 @@ impl Parser {
                     .into());
                 }
             }
+            Token::While => {
+                self.consume();
+                let cond = self.parse_parenthetical_expression()?;
+                let body = self.parse_block()?;
+                ast::Statement::While(cond, body)
+            }
+            Token::If => {
+                self.consume();
+                let cond = self.parse_parenthetical_expression()?;
+                let body = self.parse_block()?;
+                // TODO: else if
+                let else_ = if let Token::Else = self.token()? {
+                    self.consume();
+                    self.parse_block()?
+                } else {
+                    Default::default()
+                };
+                ast::Statement::IfElse(cond, body, else_)
+            }
             _ => {
+                self.token()?;
                 // Simple Assignment ( = )
-                if let Token::Identifier(_) = self.token()? {
-                    if let Ok(Token::Equal) = self.lexer.peek() {
-                        let lvalue = self.parse_lvalue()?;
-                        self.token()?;
-                        self.consume();
-                        ast::Statement::Assignment(lvalue, self.parse_expression()?)
-                    }
-                    // Simple Declaration ( := )
-                    else if let Ok(Token::ColonEqual) = self.lexer.peek() {
-                        let lvalue = self.parse_identifier()?;
-                        self.token()?;
-                        self.consume();
-                        ast::Statement::Declaration(lvalue, self.parse_expression()?)
-                    } else {
-                        ast::Statement::Expression(self.parse_expression()?)
-                    }
+                if let Ok(Token::Equal) = self.lexer.peek() {
+                    let lvalue = self.parse_lvalue()?;
+                    self.token()?;
+                    self.consume();
+                    ast::Statement::Assignment(lvalue, self.parse_expression()?)
+                }
+                // Simple Declaration ( := )
+                else if let Ok(Token::ColonEqual) = self.lexer.peek() {
+                    let lvalue = self.parse_identifier()?;
+                    self.token()?;
+                    self.consume();
+                    ast::Statement::Declaration(lvalue, self.parse_expression()?)
                 } else {
                     ast::Statement::Expression(self.parse_expression()?)
                 }
@@ -107,6 +123,54 @@ impl Parser {
                 self.consume();
                 ast::Expression::Subtract(lhs, Box::new(self.parse_expression()?))
             }
+            Token::EqualEqual => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::Equal,
+                )
+            }
+            Token::LessEqual => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::LessEqual,
+                )
+            }
+            Token::LeftAngle => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::LessThan,
+                )
+            }
+            Token::GreaterEqual => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::GreaterEqual,
+                )
+            }
+            Token::RightAngle => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::GreaterThan,
+                )
+            }
+            Token::SlashEqual => {
+                self.consume();
+                ast::Expression::Compare(
+                    lhs,
+                    Box::new(self.parse_expression()?),
+                    ast::Comparison::NotEqual,
+                )
+            }
             _ => ast::Expression::Term(lhs),
         })
     }
@@ -138,14 +202,7 @@ impl Parser {
             // Token::Identifier(id) => {self.advance_token();ast::Factor(ast::Identifier(id))},
             Token::Lambda => self.parse_lambda_expression()?,
             Token::LeftParen => {
-                self.consume();
-                let parenthesized = self.parse_expression()?;
-                if let Token::RightParen = self.token()? {
-                    self.consume();
-                    ast::Factor::Expression(Box::new(parenthesized))
-                } else {
-                    Err(ParserError::Error("missing closing parenthesis".to_owned()))?
-                }
+                ast::Factor::Expression(Box::new(self.parse_parenthetical_expression()?))
             }
             Token::Minus => {
                 self.consume();
@@ -157,9 +214,7 @@ impl Parser {
             }
             Token::Identifier(name) => {
                 if let Token::LeftParen = self.lexer.peek()? {
-                    let x = self.parse_function_call()?;
-                    // // println!("{:?}", x);
-                    x
+                    self.parse_function_call()?
                 } else {
                     self.consume();
                     ast::Factor::Variable(ast::Identifier { name })
@@ -171,6 +226,33 @@ impl Parser {
                 self.lexer.get_all_tokens()
             )))?,
         })
+    }
+
+    fn parse_parenthetical_expression(&mut self) -> Result<ast::Expression, Error> {
+        if let Token::LeftParen = self.token()? {
+            self.consume();
+            let parenthesized = self.parse_expression()?;
+            if let Token::RightParen = self.token()? {
+                self.consume();
+                Ok(parenthesized)
+            } else {
+                Err(ParserError::Error(
+                    format!(
+                        "Expected closing parenthesis found {:?} instead",
+                        self.token()?
+                    )
+                    .to_owned(),
+                ))?
+            }
+        } else {
+            Err(ParserError::Error(
+                format!(
+                    "Expected open parenthesis found {:?} instead",
+                    self.token()?
+                )
+                .to_owned(),
+            ))?
+        }
     }
 
     fn parse_block(&mut self) -> Result<ast::Block, Error> {

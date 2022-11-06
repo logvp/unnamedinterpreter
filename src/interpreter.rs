@@ -10,9 +10,10 @@ use crate::parser::Parser;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Function { func: Rc<FunctionType> },
+    Function(Rc<FunctionType>),
     Int(i32),
     String(String),
+    Boolean(bool),
     None,
 }
 
@@ -22,11 +23,46 @@ impl Display for RuntimeValue {
             Self::Function { .. } => write!(f, "FunctionObject"),
             Self::Int(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),
+            Self::Boolean(boolean) => write!(f, "{}", boolean),
             Self::None => write!(f, "NoneType"),
         }
     }
 }
-
+impl PartialEq for RuntimeValue {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Int(a) => {
+                if let Self::Int(b) = other {
+                    *a == *b
+                } else {
+                    false
+                }
+            }
+            Self::String(a) => {
+                if let Self::String(b) = other {
+                    *a == *b
+                } else {
+                    false
+                }
+            }
+            Self::Boolean(a) => {
+                if let Self::Boolean(b) = other {
+                    *a == *b
+                } else {
+                    false
+                }
+            }
+            Self::Function(_) => todo!(),
+            Self::None => {
+                if let Self::None = other {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
 impl RuntimeValue {
     fn int(&self) -> Result<i32, RuntimeError> {
         if let Self::Int(int) = self {
@@ -39,11 +75,21 @@ impl RuntimeValue {
     }
 
     fn string(&self) -> Result<&String, RuntimeError> {
-        if let Self::String(s) = self {
-            Ok(s)
+        if let Self::String(string) = self {
+            Ok(string)
         } else {
             Err(RuntimeError::Error(
-                format!("Expected integer type, found {} instead", self.get_type()).to_owned(),
+                format!("Expected string type, found {} instead", self.get_type()).to_owned(),
+            ))
+        }
+    }
+
+    fn boolean(&self) -> Result<bool, RuntimeError> {
+        if let Self::Boolean(boolean) = self {
+            Ok(*boolean)
+        } else {
+            Err(RuntimeError::Error(
+                format!("Expected boolean type, found {} instead", self.get_type()).to_owned(),
             ))
         }
     }
@@ -53,6 +99,7 @@ impl RuntimeValue {
             RuntimeValue::Function { .. } => "Function",
             RuntimeValue::Int(_) => "Int",
             RuntimeValue::String(_) => "String",
+            RuntimeValue::Boolean(_) => "Boolean",
             RuntimeValue::None => "NoneType",
         }
     }
@@ -120,27 +167,21 @@ impl Context {
         };
         global.insert(
             "print".to_string(),
-            RuntimeValue::Function {
-                func: Rc::new(FunctionType::Intrinsic {
-                    kind: IntrinsicFunction::Print,
-                }),
-            },
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+                kind: IntrinsicFunction::Print,
+            })),
         );
         global.insert(
             "typeof".to_string(),
-            RuntimeValue::Function {
-                func: Rc::new(FunctionType::Intrinsic {
-                    kind: IntrinsicFunction::TypeOf,
-                }),
-            },
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+                kind: IntrinsicFunction::TypeOf,
+            })),
         );
         global.insert(
             "debug".to_string(),
-            RuntimeValue::Function {
-                func: Rc::new(FunctionType::Intrinsic {
-                    kind: IntrinsicFunction::Debug,
-                }),
-            },
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+                kind: IntrinsicFunction::Debug,
+            })),
         );
 
         global
@@ -232,18 +273,34 @@ impl Eval for Statement {
                 }
             }
             Self::Assignment(lhs, rhs) => {
-                if ctx.contains(lhs.name()) {
+                if ctx.contains(lhs.name().unwrap()) {
                     let value = rhs.eval(ctx.clone())?;
-                    ctx.update(lhs.name().clone(), value)
+                    ctx.update(lhs.name().unwrap().clone(), value)
                         .expect("could not update value");
                     Ok(RuntimeValue::None)
                 } else {
                     Err(RuntimeError::Error(
-                        format!("Variable {} has not been declared in scope", lhs.name())
-                            .to_owned(),
+                        format!(
+                            "Variable {} has not been declared in scope",
+                            lhs.name().unwrap()
+                        )
+                        .to_owned(),
                     )
                     .into())
                 }
+            }
+            Self::IfElse(cond, body, else_) => {
+                if cond.eval(ctx.clone())?.boolean()? {
+                    body.eval(ctx.clone())
+                } else {
+                    else_.eval(ctx.clone())
+                }
+            }
+            Self::While(cond, body) => {
+                while cond.eval(ctx.clone())?.boolean()? {
+                    body.eval(ctx.clone())?;
+                }
+                Ok(RuntimeValue::None)
             }
             Self::Expression(expr) => expr.eval(ctx.clone()),
         }
@@ -259,6 +316,22 @@ impl Eval for Expression {
             Self::Subtract(lhs, rhs) => {
                 RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx.clone())?.int()?)
             }
+            Self::Compare(lhs, rhs, op) => RuntimeValue::Boolean(match op {
+                Comparison::Equal => lhs.eval(ctx.clone())? == rhs.eval(ctx.clone())?,
+                Comparison::NotEqual => lhs.eval(ctx.clone())? != rhs.eval(ctx.clone())?,
+                Comparison::LessThan => {
+                    lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx.clone())?.int()?
+                }
+                Comparison::LessEqual => {
+                    lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx.clone())?.int()?
+                }
+                Comparison::GreaterThan => {
+                    lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx.clone())?.int()?
+                }
+                Comparison::GreaterEqual => {
+                    lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx.clone())?.int()?
+                }
+            }),
             Self::Term(term) => term.eval(ctx.clone())?,
         })
     }
@@ -290,15 +363,15 @@ impl Eval for Factor {
             Self::Expression(expr) => expr.eval(ctx.clone()),
             Self::Negate(factor) => factor.eval(ctx.clone()),
             Self::Variable(identifier) => identifier.eval(ctx.clone()),
-            Self::Lambda(param, body) => Ok(RuntimeValue::Function {
-                func: Rc::new(FunctionType::Lambda {
+            Self::Lambda(param, body) => {
+                Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda {
                     parent_scope: ctx,
                     parameters: param.to_owned(),
                     body: body.to_owned(),
-                }),
-            }),
+                })))
+            }
             Self::FunctionCall(fun, args) => match fun.eval(ctx.clone())? {
-                RuntimeValue::Function { func: function } => match function.borrow() {
+                RuntimeValue::Function(function) => match function.borrow() {
                     FunctionType::Lambda {
                         parent_scope,
                         parameters,
@@ -377,6 +450,7 @@ impl Eval for Literal {
         match self {
             Self::IntLiteral(int) => Ok(RuntimeValue::Int(*int)),
             Self::StringLiteral(string) => Ok(RuntimeValue::String(string.to_owned())),
+            Self::BooleanLiteral(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
     }
 }
