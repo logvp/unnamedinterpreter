@@ -51,8 +51,6 @@ impl Display for LexerError {
 
 #[derive(Debug)]
 pub enum ParserError {
-    SyntaxError(Loc),
-    Eof(Loc),
     Error(String),
     // UnbalancedParen(Loc),
 }

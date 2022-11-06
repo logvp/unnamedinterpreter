@@ -35,10 +35,11 @@
 - [ ] Better error reporting
   - [ ] Enumerated error types
   - [ ] Location + snippet
+- [ ] Handle escape sequences in strings
 - [ ] Tests
 
 ## Bugs
 
-- [ ] If return value is undefined, closures will return the return value of the parent environment
+- [x] If return value is undefined, closures will return the return value of the parent environment
 - [ ] `RuntimeValue`: "private type `FunctionType` in public interface"
 - [ ] `loc` in lexer is not accurate

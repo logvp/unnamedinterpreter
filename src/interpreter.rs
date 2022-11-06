@@ -10,7 +10,7 @@ use crate::parser::Parser;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Function(Rc<FunctionType>),
+    Function(Rc<FunctionType>), // TODO: Fix this somehow
     Int(i32),
     String(String),
     Boolean(bool),
@@ -225,6 +225,10 @@ impl Context {
         })
     }
 
+    fn get_from_local(&self, key: &String) -> Option<RuntimeValue> {
+        self.data.borrow().get(key).cloned()
+    }
+
     fn new(parent: Rc<Self>) -> Self {
         Context {
             data: Default::default(),
@@ -391,7 +395,9 @@ impl Eval for Factor {
                         let rc = Rc::new(scope);
                         body.eval(rc.clone())?;
                         Ok(rc
-                            .get(&"return".to_string())
+                            // Fixes value being returned from outer scope
+                            // TODO: don't let functions modify return values of outer scope
+                            .get_from_local(&"return".to_string())
                             .unwrap_or(RuntimeValue::None)
                             .to_owned())
                     }
