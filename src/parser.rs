@@ -14,11 +14,10 @@ impl Parser {
         }
     }
 
-    // error reporting when needed
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
         let mut ast: ast::Ast = Default::default();
         while self.lexer.has_next() {
-            // // println!("{:?}", self.lexer.peek_rest());
+            // println!("{:?}", self.lexer.peek_rest());
             ast.push(self.parse_ast_node()?);
         }
         Ok(ast)
@@ -38,8 +37,10 @@ impl Parser {
                     self.consume();
                     ast::Statement::Declaration(identifier, self.parse_expression()?)
                 } else {
-                    return Err(ParserError::Error(
-                        "Expected equal sign after let identifier construct".to_owned(),
+                    return Err(ParserError::ExpectedButFoundIn(
+                        Token::Equal,
+                        self.token()?,
+                        ast::Construct::Let,
                     )
                     .into());
                 }
@@ -51,8 +52,10 @@ impl Parser {
                     self.consume();
                     ast::Statement::Assignment(lvalue, self.parse_expression()?)
                 } else {
-                    return Err(ParserError::Error(
-                        "Expected equal sign after set identifier construct".to_owned(),
+                    return Err(ParserError::ExpectedButFoundIn(
+                        Token::Equal,
+                        self.token()?,
+                        ast::Construct::Set,
                     )
                     .into());
                 }
@@ -100,12 +103,10 @@ impl Parser {
             self.consume();
             return Ok(body);
         } else {
-            return Err(ParserError::Error(
-                format!(
-                    "Expected semicolon at end of statement, found {:?} instead",
-                    self.token()
-                )
-                .to_owned(),
+            return Err(ParserError::ExpectedButFoundIn(
+                Token::Semicolon,
+                self.token()?,
+                ast::Construct::Statement,
             )
             .into());
         }
@@ -220,11 +221,7 @@ impl Parser {
                     ast::Factor::Variable(ast::Identifier { name })
                 }
             }
-            _ => Err(ParserError::Error(format!(
-                "unable to parse factor {:?}, {:?}",
-                self.token(),
-                self.lexer.get_all_tokens()
-            )))?,
+            _ => Err(ParserError::ExpectedConstruct(ast::Construct::Factor))?,
         })
     }
 
@@ -236,33 +233,25 @@ impl Parser {
                 self.consume();
                 Ok(parenthesized)
             } else {
-                Err(ParserError::Error(
-                    format!(
-                        "Expected closing parenthesis found {:?} instead",
-                        self.token()?
-                    )
-                    .to_owned(),
+                Err(ParserError::ExpectedButFound(
+                    Token::RightParen,
+                    self.token()?,
                 ))?
             }
         } else {
-            Err(ParserError::Error(
-                format!(
-                    "Expected open parenthesis found {:?} instead",
-                    self.token()?
-                )
-                .to_owned(),
+            Err(ParserError::ExpectedButFound(
+                Token::LeftParen,
+                self.token()?,
             ))?
         }
     }
 
     fn parse_block(&mut self) -> Result<ast::Block, Error> {
         if !self.token()?.kind_eq(&Token::LeftBrace) {
-            return Err(ParserError::Error(
-                format!(
-                    "Expected block beginning with `{{` found {:?}",
-                    self.token()?
-                )
-                .to_owned(),
+            return Err(ParserError::ExpectedButFoundIn(
+                Token::LeftBrace,
+                self.token()?,
+                ast::Construct::Block,
             )
             .into());
         }
@@ -278,18 +267,15 @@ impl Parser {
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
         if !self.token()?.kind_eq(&Token::Lambda) {
-            return Err(ParserError::Error(
-                "Attempted to parse lambda expression but failed to find keyworld `lambda`"
-                    .to_owned(),
-            )
-            .into());
+            return Err(ParserError::ExpectedButFound(Token::Lambda, self.token()?).into());
         }
         // println!("got lambda keyword");
         self.consume();
         let mut params: Vec<ast::Identifier> = Default::default();
         if !self.token()?.kind_eq(&Token::LeftParen) {
-            return Err(ParserError::Error(
-                "Expected parameter list after keyworld `lambda`".to_owned(),
+            return Err(ParserError::ExpectedConstructIn(
+                ast::Construct::ParameterList,
+                ast::Construct::Lambda,
             )
             .into());
         }
@@ -307,9 +293,10 @@ impl Parser {
             } else if let Token::RightParen = self.token()? {
                 break;
             } else {
-                return Err(
-                    ParserError::Error("Expected comma or close parenthesis".to_owned()).into(),
-                );
+                Err(ParserError::ExpectedTheseButFound(
+                    vec![Token::Comma, Token::RightParen],
+                    self.token()?,
+                ))?;
             }
         }
         self.consume();
@@ -339,12 +326,12 @@ impl Parser {
                     if let Token::Comma = self.token()? {
                         self.consume();
                         continue;
+                    } else if let Token::RightParen = self.token()? {
+                        break;
                     } else {
-                        if let Token::RightParen = self.token()? {
-                            break;
-                        }
-                        Err(ParserError::Error(
-                            "Expected comma or close parenthesis".to_owned(),
+                        Err(ParserError::ExpectedTheseButFound(
+                            vec![Token::Comma, Token::RightParen],
+                            self.token()?,
                         ))?;
                     }
                 }
@@ -352,7 +339,7 @@ impl Parser {
                 return Ok(ast::Factor::FunctionCall(ast::Identifier { name }, args));
             }
         }
-        Err(ParserError::Error("Expected function call".to_owned()).into())
+        Err(ParserError::ExpectedConstruct(ast::Construct::FunctionCall).into())
     }
 
     fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {
@@ -364,7 +351,10 @@ impl Parser {
             self.consume();
             Ok(ast::Identifier { name })
         } else {
-            Err(ParserError::Error("Expected identifier name".to_owned()).into())
+            Err(
+                ParserError::ExpectedButFound(Token::Identifier(String::new()), self.token()?)
+                    .into(),
+            )
         }
     }
 
@@ -379,6 +369,7 @@ impl Parser {
 
     fn consume(&mut self) {
         if self.token.is_none() {
+            // Error in the parser logic not in user program
             panic!("tried to consume same token twice")
         }
         self.token = None

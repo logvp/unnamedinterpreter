@@ -11,17 +11,41 @@ use crate::parser::Parser;
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
     Function(Rc<FunctionType>), // TODO: Fix this somehow
-    Int(i32),
+    Integer(i32),
     String(String),
     Boolean(bool),
     None,
+}
+
+#[derive(Debug)]
+pub enum RuntimeType {
+    Function,
+    Integer,
+    String,
+    Boolean,
+    None,
+}
+impl Display for RuntimeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Function => "Function",
+                Self::Integer => "Integer",
+                Self::String => "String",
+                Self::Boolean => "Boolean",
+                Self::None => "NoneType",
+            }
+        )
+    }
 }
 
 impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Function { .. } => write!(f, "FunctionObject"),
-            Self::Int(int) => write!(f, "{}", int),
+            Self::Integer(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),
             Self::Boolean(boolean) => write!(f, "{}", boolean),
             Self::None => write!(f, "NoneType"),
@@ -31,8 +55,8 @@ impl Display for RuntimeValue {
 impl PartialEq for RuntimeValue {
     fn eq(&self, other: &Self) -> bool {
         match self {
-            Self::Int(a) => {
-                if let Self::Int(b) = other {
+            Self::Integer(a) => {
+                if let Self::Integer(b) = other {
                     *a == *b
                 } else {
                     false
@@ -65,11 +89,12 @@ impl PartialEq for RuntimeValue {
 }
 impl RuntimeValue {
     fn int(&self) -> Result<i32, RuntimeError> {
-        if let Self::Int(int) = self {
+        if let Self::Integer(int) = self {
             Ok(*int)
         } else {
-            Err(RuntimeError::Error(
-                format!("Expected integer type, found {} instead", self.get_type()).to_owned(),
+            Err(RuntimeError::ExpectedButFound(
+                RuntimeType::Integer,
+                self.get_type(),
             ))
         }
     }
@@ -78,8 +103,9 @@ impl RuntimeValue {
         if let Self::String(string) = self {
             Ok(string)
         } else {
-            Err(RuntimeError::Error(
-                format!("Expected string type, found {} instead", self.get_type()).to_owned(),
+            Err(RuntimeError::ExpectedButFound(
+                RuntimeType::String,
+                self.get_type(),
             ))
         }
     }
@@ -88,19 +114,20 @@ impl RuntimeValue {
         if let Self::Boolean(boolean) = self {
             Ok(*boolean)
         } else {
-            Err(RuntimeError::Error(
-                format!("Expected boolean type, found {} instead", self.get_type()).to_owned(),
+            Err(RuntimeError::ExpectedButFound(
+                RuntimeType::Boolean,
+                self.get_type(),
             ))
         }
     }
 
-    fn get_type(&self) -> &'static str {
+    fn get_type(&self) -> RuntimeType {
         match self {
-            RuntimeValue::Function { .. } => "Function",
-            RuntimeValue::Int(_) => "Int",
-            RuntimeValue::String(_) => "String",
-            RuntimeValue::Boolean(_) => "Boolean",
-            RuntimeValue::None => "NoneType",
+            Self::Function { .. } => RuntimeType::Function,
+            Self::Integer(_) => RuntimeType::Integer,
+            Self::String(_) => RuntimeType::String,
+            Self::Boolean(_) => RuntimeType::Boolean,
+            Self::None => RuntimeType::None,
         }
     }
 }
@@ -271,9 +298,7 @@ impl Eval for Statement {
                     ctx.insert(lhs.name.clone(), value);
                     Ok(RuntimeValue::None)
                 } else {
-                    Err(RuntimeError::Error(
-                        format!("Variable {} was already declared in scope", lhs.name).to_owned(),
-                    ))?
+                    Err(RuntimeError::VariableAlreadyDeclared(lhs.name.clone()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
@@ -283,14 +308,7 @@ impl Eval for Statement {
                         .expect("could not update value");
                     Ok(RuntimeValue::None)
                 } else {
-                    Err(RuntimeError::Error(
-                        format!(
-                            "Variable {} has not been declared in scope",
-                            lhs.name().unwrap()
-                        )
-                        .to_owned(),
-                    )
-                    .into())
+                    Err(RuntimeError::UnknownVariable(lhs.name().unwrap().clone()).into())
                 }
             }
             Self::IfElse(cond, body, else_) => {
@@ -315,10 +333,10 @@ impl Eval for Expression {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         Ok(match self {
             Self::Add(lhs, rhs) => {
-                RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx.clone())?.int()?)
             }
             Self::Subtract(lhs, rhs) => {
-                RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx.clone())?.int()?)
             }
             Self::Compare(lhs, rhs, op) => RuntimeValue::Boolean(match op {
                 Comparison::Equal => lhs.eval(ctx.clone())? == rhs.eval(ctx.clone())?,
@@ -345,10 +363,10 @@ impl Eval for Term {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         Ok(match self {
             Self::Multiply(lhs, rhs) => {
-                RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx.clone())?.int()?)
             }
             Self::Divide(lhs, rhs) => {
-                RuntimeValue::Int(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?)
             }
             Self::Concatenate(lhs, rhs) => RuntimeValue::String(format!(
                 "{}{}",
@@ -383,11 +401,10 @@ impl Eval for Factor {
                     } => {
                         let scope = Context::new(parent_scope.clone());
                         if parameters.len() != args.len() {
-                            Err(RuntimeError::Error(format!(
-                                "Function expects {} argument but {} were provided",
+                            Err(RuntimeError::ExpectedArgumentsFound(
                                 parameters.len(),
-                                args.len()
-                            )))?
+                                args.len(),
+                            ))?
                         }
                         for (ident, val) in parameters.iter().zip(args.iter()) {
                             scope.insert(ident.name.to_owned(), val.eval(ctx.clone())?);
@@ -411,15 +428,12 @@ impl Eval for Factor {
                         }
                         IntrinsicFunction::TypeOf => {
                             if args.len() != 1 {
-                                Err(RuntimeError::Error(format!(
-                                    "TypeOf intrinsic expects 1 argument found {} instead",
-                                    args.len()
-                                ))
-                                .into())
+                                Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
                             } else {
-                                Ok(RuntimeValue::String(
-                                    args[0].eval(ctx.clone())?.get_type().to_owned(),
-                                ))
+                                Ok(RuntimeValue::String(format!(
+                                    "{}",
+                                    args[0].eval(ctx.clone())?.get_type()
+                                )))
                             }
                         }
                         IntrinsicFunction::Debug => {
@@ -431,11 +445,9 @@ impl Eval for Factor {
                         }
                     },
                 },
-                _ => Err(RuntimeError::Error(format!(
-                    "Function call expected Function found {} instead",
-                    fun
-                ))
-                .into()),
+                x => {
+                    Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into())
+                }
             },
         }
     }
@@ -454,7 +466,7 @@ impl Eval for Block {
 impl Eval for Literal {
     fn eval(&self, _: Rc<Context>) -> InterpreterReturn {
         match self {
-            Self::IntLiteral(int) => Ok(RuntimeValue::Int(*int)),
+            Self::IntLiteral(int) => Ok(RuntimeValue::Integer(*int)),
             Self::StringLiteral(string) => Ok(RuntimeValue::String(string.to_owned())),
             Self::BooleanLiteral(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
@@ -465,7 +477,7 @@ impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match ctx.get(&self.name) {
             Some(val) => Ok(val.clone()),
-            None => Err(RuntimeError::Error(format!("Unknown identifier `{}`", self.name)).into()),
+            None => Err(RuntimeError::UnknownVariable(self.name.to_owned()).into()),
         }
     }
 }

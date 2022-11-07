@@ -3,6 +3,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+pub type Construct = crate::error::AstConstruct;
+
 #[derive(Debug, Default)]
 pub struct Ast {
     nodes: Vec<AstNode>,

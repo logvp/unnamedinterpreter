@@ -1,4 +1,26 @@
+use crate::lexer;
 use std::fmt::Display;
+
+#[derive(Debug)]
+pub enum AstConstruct {
+    Ast,
+    AstNode,
+    Block,
+    Statement,
+    Let,
+    Set,
+    Expression,
+    Term,
+    Factor,
+    Lvalue,
+    Identifier,
+    Literal,
+    FunctionCall,
+    ParameterList,
+    Lambda,
+}
+
+pub use crate::interpreter::RuntimeType;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Loc {
@@ -15,7 +37,7 @@ impl Display for Loc {
 pub enum Error {
     LexerError(LexerError),
     ParserError(ParserError),
-    InterpreterError(RuntimeError),
+    RuntimeError(RuntimeError),
 }
 impl From<LexerError> for Error {
     fn from(e: LexerError) -> Self {
@@ -29,7 +51,7 @@ impl From<ParserError> for Error {
 }
 impl From<RuntimeError> for Error {
     fn from(e: RuntimeError) -> Self {
-        Error::InterpreterError(e)
+        Error::RuntimeError(e)
     }
 }
 
@@ -38,24 +60,20 @@ pub enum LexerError {
     Eof,
     UnknownToken(String, Loc),
 }
-impl Display for LexerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Eof => write!(f, "End of file input"),
-            Self::UnknownToken(snip, loc) => {
-                write!(f, "Unknown Token: \"{}[...]\"\nat: {}", snip, loc)
-            }
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum ParserError {
-    Error(String),
-    // UnbalancedParen(Loc),
+    ExpectedButFound(lexer::Token, lexer::Token),
+    ExpectedButFoundIn(lexer::Token, lexer::Token, AstConstruct),
+    ExpectedTheseButFound(Vec<lexer::Token>, lexer::Token),
+    ExpectedConstruct(AstConstruct),
+    ExpectedConstructIn(AstConstruct, AstConstruct),
 }
 
 #[derive(Debug)]
 pub enum RuntimeError {
-    Error(String),
+    ExpectedButFound(RuntimeType, RuntimeType),
+    ExpectedArgumentsFound(usize, usize),
+    VariableAlreadyDeclared(String),
+    UnknownVariable(String),
 }
