@@ -76,7 +76,14 @@ impl PartialEq for RuntimeValue {
                     false
                 }
             }
-            Self::Function(_) => todo!(),
+            Self::Function(a) => {
+                // Two functions are equal iff they are aliases of each other
+                if let Self::Function(b) = other {
+                    Rc::ptr_eq(a, b)
+                } else {
+                    false
+                }
+            }
             Self::None => {
                 if let Self::None = other {
                     true
