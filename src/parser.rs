@@ -199,7 +199,7 @@ impl Parser {
     fn parse_factor(&mut self) -> Result<ast::Factor, Error> {
         // println!("parsing factor");
         // println!("rest: {:?}", self.lexer.peek_rest());
-        Ok(match self.token()? {
+        let factor = match self.token()? {
             // Token::Identifier(id) => {self.advance_token();ast::Factor(ast::Identifier(id))},
             Token::Lambda => self.parse_lambda_expression()?,
             Token::LeftParen => {
@@ -214,15 +214,18 @@ impl Parser {
                 ast::Factor::Literal(literal)
             }
             Token::Identifier(name) => {
-                if let Token::LeftParen = self.lexer.peek()? {
-                    self.parse_function_call()?
-                } else {
-                    self.consume();
-                    ast::Factor::Variable(ast::Identifier { name })
-                }
+                self.consume();
+                ast::Factor::Variable(ast::Identifier { name })
             }
             _ => Err(SyntaxError::UnexpectedToken(self.token()?))?,
-        })
+        };
+        if let Token::LeftParen = self.token()? {
+            self.parse_function_call(factor)
+        } else {
+            Ok(factor)
+        }
+
+        // todo!()
     }
 
     fn parse_parenthetical_expression(&mut self) -> Result<ast::Expression, Error> {
@@ -276,10 +279,6 @@ impl Parser {
         self.consume();
         // TODO: this feels too complicated
         while !self.token()?.kind_eq(&Token::RightParen) {
-            if let Token::RightParen = self.token()? {
-                self.consume();
-                break;
-            }
             params.push(self.parse_identifier()?);
             if let Token::Comma = self.token()? {
                 self.consume();
@@ -293,47 +292,52 @@ impl Parser {
                 ))?;
             }
         }
-        self.consume();
-        // println!("got arg list");
+        self.consume(); // consume `)`
 
         let block = self.parse_block()?;
-        // println!("got block");
 
         Ok(ast::Factor::Lambda(params, block))
     }
 
-    fn parse_function_call(&mut self) -> Result<ast::Factor, Error> {
-        if let Token::Identifier(name) = self.token()? {
+    fn parse_function_call(&mut self, func: ast::Factor) -> Result<ast::Factor, Error> {
+        let call = ast::Factor::FunctionCall(Box::new(func), self.parse_function_args()?);
+        if let Token::LeftParen = self.token()? {
+            self.parse_function_call(call)
+        } else {
+            Ok(call)
+        }
+    }
+
+    fn parse_function_args(&mut self) -> Result<Vec<ast::Expression>, Error> {
+        if let Token::LeftParen = self.token()? {
             // // println!("{:?}", self.token()?);
             self.consume();
-            if let Token::LeftParen = self.token()? {
-                // // println!("{:?}", self.token()?);
-                self.consume();
-                let mut args: Vec<ast::Expression> = Default::default();
-                // TODO: this feels too complicated
-                while !self.token()?.kind_eq(&Token::RightParen) {
-                    if let Token::RightParen = self.token()? {
-                        self.consume();
-                        break;
-                    }
-                    args.push(self.parse_expression()?);
-                    if let Token::Comma = self.token()? {
-                        self.consume();
-                        continue;
-                    } else if let Token::RightParen = self.token()? {
-                        break;
-                    } else {
-                        Err(SyntaxError::ExpectedTheseButFound(
-                            vec![Token::Comma, Token::RightParen],
-                            self.token()?,
-                        ))?;
-                    }
+            let mut args: Vec<ast::Expression> = Default::default();
+            while !self.token()?.kind_eq(&Token::RightParen) {
+                args.push(self.parse_expression()?);
+                // this allows for trailing commas. should that be an error?
+                if let Token::Comma = self.token()? {
+                    self.consume();
+                    continue;
+                } else if let Token::RightParen = self.token()? {
+                    break;
+                } else {
+                    Err(SyntaxError::ExpectedTheseButFound(
+                        vec![Token::Comma, Token::RightParen],
+                        self.token()?,
+                    ))?;
                 }
-                self.consume();
-                return Ok(ast::Factor::FunctionCall(ast::Identifier { name }, args));
             }
+            self.consume(); // consume `)`
+            Ok(args)
+        } else {
+            Err(SyntaxError::ExpectedTokenIn(
+                Token::LeftParen,
+                self.token()?,
+                ast::ConstructKind::FunctionCall,
+            )
+            .into())
         }
-        Err(SyntaxError::ExpectedConstruct(ast::ConstructKind::FunctionCall).into())
     }
 
     fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {

@@ -115,6 +115,8 @@ Factor
 | Identifier
 | ( Expression )
 | - Factor
+| lambda ( Identifier* ) { Statement* }
+| Factor ( Expression* )
 ;
 */
 #[derive(Debug, Clone)]
@@ -124,7 +126,7 @@ pub enum Factor {
     Negate(Box<Factor>),
     Variable(Identifier),
     Lambda(Vec<Identifier>, Block),
-    FunctionCall(Identifier, Vec<Expression>), // TODO: hold Expression not identifier ( will change parsing ':(' )
+    FunctionCall(Box<Factor>, Vec<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -134,7 +136,7 @@ pub enum Lvalue {
 impl Lvalue {
     pub fn name(&self) -> Option<&String> {
         match self {
-            Lvalue::Identifier(ident) => Some(&ident.name),
+            Self::Identifier(ident) => Some(&ident.name),
             // _ => None,
         }
     }
@@ -167,9 +169,9 @@ impl Display for AstNode {
         let w = if let Some(n) = f.width() { n } else { 0 };
         writeln!(f, "{:w$}AstNode:", "")?;
         match self {
-            // AstNode::Expression(e) => e,
-            AstNode::Statement(s) => write!(f, "{:width$}", s, width = w + INDENT_INCREASE),
-            // AstNode::Block(b) => write!(f, "{:width$}", b, width = w + INDENT_INCREASE),
+            // Self::Expression(e) => e,
+            Self::Statement(s) => write!(f, "{:width$}", s, width = w + INDENT_INCREASE),
+            // Self::Block(b) => write!(f, "{:width$}", b, width = w + INDENT_INCREASE),
         }
     }
 }
@@ -187,28 +189,28 @@ impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Statement::Declaration(i, e) => {
+            Self::Declaration(i, e) => {
                 writeln!(f, "{:w$}Assignment:", "")?;
                 write!(f, "{:width$}", i, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Statement::Assignment(l, e) => {
+            Self::Assignment(l, e) => {
                 writeln!(f, "{:w$}Reassignment:", "")?;
                 write!(f, "{:width$}", l, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Statement::While(cond, body) => {
+            Self::While(cond, body) => {
                 writeln!(f, "{:w$}While:", "")?;
                 write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
-            Statement::IfElse(cond, body, else_) => {
+            Self::IfElse(cond, body, else_) => {
                 writeln!(f, "{:w$}IfElse:", "")?;
                 write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", else_, width = w + INDENT_INCREASE)?;
             }
-            Statement::Expression(e) => {
+            Self::Expression(e) => {
                 write!(f, "{:w$}", e)?;
             }
         }
@@ -219,20 +221,20 @@ impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Expression::Add(t, e) => {
+            Self::Add(t, e) => {
                 writeln!(f, "{:w$}Add:", "")?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Expression::Subtract(t, e) => {
+            Self::Subtract(t, e) => {
                 writeln!(f, "{:w$}Subtract:", "")?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Expression::Term(term) => {
+            Self::Term(term) => {
                 write!(f, "{:w$}", term)?;
             }
-            Expression::Compare(t, e, op) => {
+            Self::Compare(t, e, op) => {
                 writeln!(f, "{:w$}Comparison ({:?}):", "", op)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
@@ -245,22 +247,22 @@ impl Display for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Term::Multiply(fac, t) => {
+            Self::Multiply(fac, t) => {
                 writeln!(f, "{:w$}Multiply:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
             }
-            Term::Divide(fac, t) => {
+            Self::Divide(fac, t) => {
                 writeln!(f, "{:w$}Divide:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
             }
-            Term::Concatenate(fac, t) => {
+            Self::Concatenate(fac, t) => {
                 writeln!(f, "{:w$}Concatenate:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
             }
-            Term::Factor(fac) => {
+            Self::Factor(fac) => {
                 write!(f, "{:w$}", fac)?;
             }
         }
@@ -271,36 +273,36 @@ impl Display for Factor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Factor::Literal(literal) => {
+            Self::Literal(literal) => {
                 // writeln!(f, "{:w$}", literal)?;
                 writeln!(f, "{:w$}Literal:", "")?;
                 write!(f, "{:width$}", literal, width = w + INDENT_INCREASE)?;
             }
-            Factor::Expression(e) => {
+            Self::Expression(e) => {
                 writeln!(f, "{:w$}Expression:", "")?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Factor::Negate(fac) => {
+            Self::Negate(fac) => {
                 writeln!(f, "{:w$}Negate:", "")?;
                 write!(f, "{:width$}", fac, width = w + INDENT_INCREASE)?;
             }
-            Factor::Variable(i) => {
+            Self::Variable(i) => {
                 write!(f, "{:w$}", i)?;
             }
-            Factor::FunctionCall(fun, args) => {
+            Self::Lambda(args, body) => {
+                writeln!(f, "{:w$}Lambda:", "")?;
+                for arg in args {
+                    write!(f, "{:width$}", arg, width = w + INDENT_INCREASE)?;
+                }
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+            }
+            Self::FunctionCall(fun, args) => {
                 writeln!(f, "{:w$}FunctionCall:", "")?;
                 write!(f, "{:width$}", fun, width = w + INDENT_INCREASE)?;
                 writeln!(f, "{:width$}Args:", "", width = w + INDENT_INCREASE)?;
                 for arg in args {
                     write!(f, "{:width$}", arg, width = w + 2 * INDENT_INCREASE)?;
                 }
-            }
-            Factor::Lambda(args, body) => {
-                writeln!(f, "{:w$}Lambda:", "")?;
-                for arg in args {
-                    write!(f, "{:width$}", arg, width = w + INDENT_INCREASE)?;
-                }
-                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
         }
         Ok(())
@@ -310,9 +312,9 @@ impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         // match self {
-        //     Literal::IntLiteral(n) => writeln!(f, "{:w$}IntLiteral({})", "", n)?,
-        //     Literal::StringLiteral(n) => writeln!(f, "{:w$}StringLiteral({})", "", n)?,
-        //     Literal::BooleanLiteral(n) => writeln!(f, "{:w$}BooleanLiteral({})", "", n)?,
+        //     Self::IntLiteral(n) => writeln!(f, "{:w$}IntLiteral({})", "", n)?,
+        //     Self::StringLiteral(n) => writeln!(f, "{:w$}StringLiteral({})", "", n)?,
+        //     Self::BooleanLiteral(n) => writeln!(f, "{:w$}BooleanLiteral({})", "", n)?,
         // }
         // Ok(())
         writeln!(f, "{:w$}{:?}", "", self)
@@ -328,7 +330,7 @@ impl Display for Lvalue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Lvalue::Identifier(n) => writeln!(f, "{:w$}", n)?,
+            Self::Identifier(n) => writeln!(f, "{:w$}", n)?,
         }
         Ok(())
     }

@@ -31,7 +31,7 @@
 - [ ] Rework `Context` + scope
   - [ ] More "proper" return values(?)
   - How would you look up anonymous Lvalue eg array index
-- [ ] Call lambda without binding to variable name
+- [x] Call lambda without binding to variable name
 - [ ] Better error reporting
   - [x] Enumerated error types
   - [ ] Location + snippet

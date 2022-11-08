@@ -361,20 +361,20 @@ impl Eval for Expression {
 
 impl Eval for Term {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
-        Ok(match self {
-            Self::Multiply(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx.clone())?.int()?)
-            }
-            Self::Divide(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?)
-            }
-            Self::Concatenate(lhs, rhs) => RuntimeValue::String(format!(
+        match self {
+            Self::Multiply(lhs, rhs) => Ok(RuntimeValue::Integer(
+                lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx.clone())?.int()?,
+            )),
+            Self::Divide(lhs, rhs) => Ok(RuntimeValue::Integer(
+                lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?,
+            )),
+            Self::Concatenate(lhs, rhs) => Ok(RuntimeValue::String(format!(
                 "{}{}",
                 lhs.eval(ctx.clone())?.string()?,
                 rhs.eval(ctx.clone())?.string()?
-            )),
-            Self::Factor(factor) => factor.eval(ctx.clone())?,
-        })
+            ))),
+            Self::Factor(factor) => factor.eval(ctx.clone()),
+        }
     }
 }
 
