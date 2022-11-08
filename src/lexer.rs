@@ -1,5 +1,7 @@
 extern crate regex;
 
+use std::fmt::Display;
+
 pub use crate::ast::Literal;
 use crate::error::{LexerError, Loc};
 use regex::Regex;
@@ -42,6 +44,48 @@ pub enum Token {
 impl Token {
     pub fn kind_eq(&self, other: &Token) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Literal(literal) => return write!(f, "{}", literal),
+                Self::Identifier(string) => return write!(f, "Identifier `{}`", string),
+                Self::LeftParen => "`(`",
+                Self::RightParen => "`)`",
+                Self::LeftAngle => "`<`",
+                Self::RightAngle => "`>`",
+                Self::LeftBracket => "`[`",
+                Self::RightBracket => "`]`",
+                Self::LeftBrace => "`{`",
+                Self::RightBrace => "`}`",
+                Self::Plus => "`+`",
+                Self::PlusPlus => "`++`",
+                Self::Minus => "`-`",
+                Self::Star => "`*`",
+                Self::Slash => "`/`",
+                Self::Comma => "`,`",
+                Self::ColonEqual => "`:=`",
+                Self::Equal => "`=`",
+                Self::Semicolon => "`;`",
+                Self::Let => "`let`",
+                Self::Set => "`set`",
+                Self::Lambda => "`lambda`",
+                Self::While => "`while`",
+                Self::If => "`if`",
+                Self::Else => "`else`",
+                Self::EqualEqual => "`==`",
+                Self::LessEqual => "`<=`",
+                Self::GreaterEqual => "`>=`",
+                Self::SlashEqual => "`/=`",
+                Self::Tilde => "`~`",
+                Self::Question => "`?`",
+                Self::Eof => "[End Of File]",
+            }
+        )
     }
 }
 

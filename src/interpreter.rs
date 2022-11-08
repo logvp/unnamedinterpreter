@@ -308,7 +308,7 @@ impl Eval for Statement {
                         .expect("could not update value");
                     Ok(RuntimeValue::None)
                 } else {
-                    Err(RuntimeError::UnknownVariable(lhs.name().unwrap().clone()).into())
+                    Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()).into())
                 }
             }
             Self::IfElse(cond, body, else_) => {
@@ -383,7 +383,7 @@ impl Eval for Factor {
         match self {
             Self::Literal(lit) => lit.eval(ctx.clone()),
             Self::Expression(expr) => expr.eval(ctx.clone()),
-            Self::Negate(factor) => factor.eval(ctx.clone()),
+            Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx.clone())?.int()?)),
             Self::Variable(identifier) => identifier.eval(ctx.clone()),
             Self::Lambda(param, body) => {
                 Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda {
@@ -477,7 +477,7 @@ impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match ctx.get(&self.name) {
             Some(val) => Ok(val.clone()),
-            None => Err(RuntimeError::UnknownVariable(self.name.to_owned()).into()),
+            None => Err(RuntimeError::UnknownIdentifier(self.name.to_owned()).into()),
         }
     }
 }

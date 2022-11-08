@@ -3,7 +3,24 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub type Construct = crate::error::AstConstruct;
+#[derive(Debug)]
+pub enum ConstructKind {
+    Ast,
+    AstNode,
+    Block,
+    Statement,
+    Let,
+    Set,
+    Expression,
+    Term,
+    Factor,
+    Lvalue,
+    Identifier,
+    Literal,
+    FunctionCall,
+    ParameterList,
+    Lambda,
+}
 
 #[derive(Debug, Default)]
 pub struct Ast {
@@ -314,5 +331,30 @@ impl Display for Lvalue {
             Lvalue::Identifier(n) => writeln!(f, "{:w$}", n)?,
         }
         Ok(())
+    }
+}
+impl Display for ConstructKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Ast => "Ast",
+                Self::AstNode => "Ast Node",
+                Self::Block => "Block",
+                Self::Statement => "Statement",
+                Self::Let => "Let",
+                Self::Set => "Set",
+                Self::Expression => "Expression",
+                Self::Term => "Term",
+                Self::Factor => "Factor",
+                Self::Lvalue => "Lvalue",
+                Self::Identifier => "Identifier",
+                Self::Literal => "Literal",
+                Self::FunctionCall => "Function Call",
+                Self::ParameterList => "Parameter List",
+                Self::Lambda => "Lambda Expression",
+            }
+        )
     }
 }

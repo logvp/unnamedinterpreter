@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::error::{Error, LexerError, ParserError};
+use crate::error::{Error, LexerError, SyntaxError};
 use crate::lexer::{Lexer, Token};
 
 pub struct Parser {
@@ -37,10 +37,10 @@ impl Parser {
                     self.consume();
                     ast::Statement::Declaration(identifier, self.parse_expression()?)
                 } else {
-                    return Err(ParserError::ExpectedButFoundIn(
+                    return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
                         self.token()?,
-                        ast::Construct::Let,
+                        ast::ConstructKind::Let,
                     )
                     .into());
                 }
@@ -52,10 +52,10 @@ impl Parser {
                     self.consume();
                     ast::Statement::Assignment(lvalue, self.parse_expression()?)
                 } else {
-                    return Err(ParserError::ExpectedButFoundIn(
+                    return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
                         self.token()?,
-                        ast::Construct::Set,
+                        ast::ConstructKind::Set,
                     )
                     .into());
                 }
@@ -103,10 +103,10 @@ impl Parser {
             self.consume();
             return Ok(body);
         } else {
-            return Err(ParserError::ExpectedButFoundIn(
+            return Err(SyntaxError::ExpectedTokenIn(
                 Token::Semicolon,
                 self.token()?,
-                ast::Construct::Statement,
+                ast::ConstructKind::Statement,
             )
             .into());
         }
@@ -221,7 +221,7 @@ impl Parser {
                     ast::Factor::Variable(ast::Identifier { name })
                 }
             }
-            _ => Err(ParserError::ExpectedConstruct(ast::Construct::Factor))?,
+            _ => Err(SyntaxError::UnexpectedToken(self.token()?))?,
         })
     }
 
@@ -233,25 +233,19 @@ impl Parser {
                 self.consume();
                 Ok(parenthesized)
             } else {
-                Err(ParserError::ExpectedButFound(
-                    Token::RightParen,
-                    self.token()?,
-                ))?
+                Err(SyntaxError::ExpectedToken(Token::RightParen, self.token()?))?
             }
         } else {
-            Err(ParserError::ExpectedButFound(
-                Token::LeftParen,
-                self.token()?,
-            ))?
+            Err(SyntaxError::ExpectedToken(Token::LeftParen, self.token()?))?
         }
     }
 
     fn parse_block(&mut self) -> Result<ast::Block, Error> {
         if !self.token()?.kind_eq(&Token::LeftBrace) {
-            return Err(ParserError::ExpectedButFoundIn(
+            return Err(SyntaxError::ExpectedTokenIn(
                 Token::LeftBrace,
                 self.token()?,
-                ast::Construct::Block,
+                ast::ConstructKind::Block,
             )
             .into());
         }
@@ -267,15 +261,15 @@ impl Parser {
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
         if !self.token()?.kind_eq(&Token::Lambda) {
-            return Err(ParserError::ExpectedButFound(Token::Lambda, self.token()?).into());
+            return Err(SyntaxError::ExpectedToken(Token::Lambda, self.token()?).into());
         }
         // println!("got lambda keyword");
         self.consume();
         let mut params: Vec<ast::Identifier> = Default::default();
         if !self.token()?.kind_eq(&Token::LeftParen) {
-            return Err(ParserError::ExpectedConstructIn(
-                ast::Construct::ParameterList,
-                ast::Construct::Lambda,
+            return Err(SyntaxError::ExpectedConstructIn(
+                ast::ConstructKind::ParameterList,
+                ast::ConstructKind::Lambda,
             )
             .into());
         }
@@ -293,7 +287,7 @@ impl Parser {
             } else if let Token::RightParen = self.token()? {
                 break;
             } else {
-                Err(ParserError::ExpectedTheseButFound(
+                Err(SyntaxError::ExpectedTheseButFound(
                     vec![Token::Comma, Token::RightParen],
                     self.token()?,
                 ))?;
@@ -329,7 +323,7 @@ impl Parser {
                     } else if let Token::RightParen = self.token()? {
                         break;
                     } else {
-                        Err(ParserError::ExpectedTheseButFound(
+                        Err(SyntaxError::ExpectedTheseButFound(
                             vec![Token::Comma, Token::RightParen],
                             self.token()?,
                         ))?;
@@ -339,7 +333,7 @@ impl Parser {
                 return Ok(ast::Factor::FunctionCall(ast::Identifier { name }, args));
             }
         }
-        Err(ParserError::ExpectedConstruct(ast::Construct::FunctionCall).into())
+        Err(SyntaxError::ExpectedConstruct(ast::ConstructKind::FunctionCall).into())
     }
 
     fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {
@@ -351,10 +345,7 @@ impl Parser {
             self.consume();
             Ok(ast::Identifier { name })
         } else {
-            Err(
-                ParserError::ExpectedButFound(Token::Identifier(String::new()), self.token()?)
-                    .into(),
-            )
+            Err(SyntaxError::ExpectedToken(Token::Identifier(String::new()), self.token()?).into())
         }
     }
 
