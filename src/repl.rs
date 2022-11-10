@@ -1,4 +1,4 @@
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, RuntimeValue};
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};
@@ -122,6 +122,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
 
             for ret in result {
                 match ret {
+                    Ok(RuntimeValue::None) => (),
                     Ok(v) => writeln!(self.output, ": {}", v)?,
                     Err(e) => writeln!(self.output, ": ERROR : {}", e)?,
                 }
