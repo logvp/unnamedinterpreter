@@ -60,36 +60,16 @@ impl Parser {
                     .into());
                 }
             }
-            Token::While => {
-                self.consume();
-                let cond = self.parse_parenthetical_expression()?;
-                let body = self.parse_block()?;
-                ast::Statement::While(cond, body)
-            }
-            Token::If => {
-                self.consume();
-                let cond = self.parse_parenthetical_expression()?;
-                let body = self.parse_block()?;
-                // TODO: else if
-                let else_ = if let Token::Else = self.token()? {
-                    self.consume();
-                    self.parse_block()?
-                } else {
-                    Default::default()
-                };
-                ast::Statement::IfElse(cond, body, else_)
-            }
             _ => {
-                self.token()?;
                 // Simple Assignment ( = )
-                if let Ok(Token::Equal) = self.lexer.peek() {
+                if let Ok(Token::Equal) = self.peek() {
                     let lvalue = self.parse_lvalue()?;
                     self.token()?;
                     self.consume();
                     ast::Statement::Assignment(lvalue, self.parse_expression()?)
                 }
                 // Simple Declaration ( := )
-                else if let Ok(Token::ColonEqual) = self.lexer.peek() {
+                else if let Ok(Token::ColonEqual) = self.peek() {
                     let lvalue = self.parse_identifier()?;
                     self.token()?;
                     self.consume();
@@ -114,65 +94,88 @@ impl Parser {
 
     fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
         // println!("parsing expression");
-        let lhs: ast::Term = self.parse_term()?;
         Ok(match self.token()? {
-            Token::Plus => {
+            Token::If => {
                 self.consume();
-                ast::Expression::Add(lhs, Box::new(self.parse_expression()?))
+                let cond = self.parse_parenthetical_expression()?;
+                let body = self.parse_block()?;
+                // TODO: else if
+                let else_ = if let Token::Else = self.token()? {
+                    self.consume();
+                    self.parse_block()?
+                } else {
+                    Default::default()
+                };
+                ast::Expression::IfElse(Box::new(cond), body, else_)
             }
-            Token::Minus => {
+            Token::While => {
                 self.consume();
-                ast::Expression::Subtract(lhs, Box::new(self.parse_expression()?))
+                let cond = self.parse_parenthetical_expression()?;
+                let body = self.parse_block()?;
+                ast::Expression::While(Box::new(cond), body)
             }
-            Token::EqualEqual => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::Equal,
-                )
+            _ => {
+                let lhs: ast::Term = self.parse_term()?;
+                match self.token()? {
+                    Token::Plus => {
+                        self.consume();
+                        ast::Expression::Add(lhs, Box::new(self.parse_expression()?))
+                    }
+                    Token::Minus => {
+                        self.consume();
+                        ast::Expression::Subtract(lhs, Box::new(self.parse_expression()?))
+                    }
+                    Token::EqualEqual => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::Equal,
+                        )
+                    }
+                    Token::LessEqual => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::LessEqual,
+                        )
+                    }
+                    Token::LeftAngle => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::LessThan,
+                        )
+                    }
+                    Token::GreaterEqual => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::GreaterEqual,
+                        )
+                    }
+                    Token::RightAngle => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::GreaterThan,
+                        )
+                    }
+                    Token::SlashEqual => {
+                        self.consume();
+                        ast::Expression::Compare(
+                            lhs,
+                            Box::new(self.parse_expression()?),
+                            ast::Comparison::NotEqual,
+                        )
+                    }
+                    _ => ast::Expression::Term(lhs),
+                }
             }
-            Token::LessEqual => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::LessEqual,
-                )
-            }
-            Token::LeftAngle => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::LessThan,
-                )
-            }
-            Token::GreaterEqual => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::GreaterEqual,
-                )
-            }
-            Token::RightAngle => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::GreaterThan,
-                )
-            }
-            Token::SlashEqual => {
-                self.consume();
-                ast::Expression::Compare(
-                    lhs,
-                    Box::new(self.parse_expression()?),
-                    ast::Comparison::NotEqual,
-                )
-            }
-            _ => ast::Expression::Term(lhs),
         })
     }
 
@@ -360,6 +363,11 @@ impl Parser {
         let r = self.token.clone().unwrap();
         // println!("{:?}", r);
         Ok(r)
+    }
+
+    fn peek(&mut self) -> Result<Token, Error> {
+        self.token()?;
+        Ok(self.lexer.peek()?)
     }
 
     fn consume(&mut self) {

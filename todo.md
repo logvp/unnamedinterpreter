@@ -3,6 +3,7 @@
 ## Goals
 
 - [ ] Demonstrate Turning completeness
+- [ ] Comprehensive Tests
 - [ ] Compile (not goals just ideas)
   - [ ] C(++) Transpilation
   - [ ] LLVM
@@ -13,8 +14,8 @@
 ## Features
 
 - [ ] Everything expression bases
-  - [ ] `if` expressions
-  - [ ] `while` expressions
+  - [x] `if` expressions
+  - [x] `while` expressions
   - [ ] Blocks as expressions
   - [ ] Allow expressions in `AstNode`s
 - [ ] Arrays
@@ -28,15 +29,16 @@
 
 ## Improvements
 
-- [ ] Rework `Context` + scope
-  - [ ] More "proper" return values(?)
-  - How would you look up anonymous Lvalue eg array index
 - [x] Call lambda without binding to variable name
 - [ ] Better error reporting
   - [x] Enumerated error types
   - [ ] Location + snippet
+- [ ] Rework `Context` + scope
+  - [ ] More "proper" return values(?)
+  - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
-- [ ] Tests
+- [ ] Allow expressions as AstNodes
+- [ ] No longer evaluate statements to values
 
 ## Bugs
 

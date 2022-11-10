@@ -14,8 +14,11 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     const PROGRAM: &str = r#"
-    x := 15;
-    if (x > 10) { print("success!"); } else { print("failure"); };
+    let x = 15;
+    set x = lambda(){ return := lambda (z) { if (z > 0) { return := "TRUE"; } else { return := "FALSE"; }; }; }();
+    v := x(99);
+    let y = x;
+    print(y(-10));
     "#;
 
     #[test]

@@ -41,7 +41,7 @@ impl DerefMut for Ast {
 
 #[derive(Debug, Clone)]
 pub enum AstNode {
-    // Expression(Expression),
+    Expression(Expression),
     Statement(Statement),
     // Block(Block),
 }
@@ -63,8 +63,6 @@ pub enum Statement {
     Declaration(Identifier, Expression),
     Assignment(Lvalue, Expression),
     Expression(Expression),
-    While(Expression, Block),
-    IfElse(Expression, Block, Block),
 }
 
 /*
@@ -81,6 +79,8 @@ pub enum Expression {
     Add(Term, Box<Expression>),
     Subtract(Term, Box<Expression>),
     Compare(Term, Box<Expression>, Comparison),
+    IfElse(Box<Expression>, Block, Block),
+    While(Box<Expression>, Block),
     Term(Term),
 }
 #[derive(Debug, Clone)]
@@ -169,7 +169,7 @@ impl Display for AstNode {
         let w = if let Some(n) = f.width() { n } else { 0 };
         writeln!(f, "{:w$}AstNode:", "")?;
         match self {
-            // Self::Expression(e) => e,
+            Self::Expression(e) => write!(f, "{:width$}", e, width = w + INDENT_INCREASE),
             Self::Statement(s) => write!(f, "{:width$}", s, width = w + INDENT_INCREASE),
             // Self::Block(b) => write!(f, "{:width$}", b, width = w + INDENT_INCREASE),
         }
@@ -199,17 +199,6 @@ impl Display for Statement {
                 write!(f, "{:width$}", l, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
-            Self::While(cond, body) => {
-                writeln!(f, "{:w$}While:", "")?;
-                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
-                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
-            }
-            Self::IfElse(cond, body, else_) => {
-                writeln!(f, "{:w$}IfElse:", "")?;
-                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
-                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
-                write!(f, "{:width$}", else_, width = w + INDENT_INCREASE)?;
-            }
             Self::Expression(e) => {
                 write!(f, "{:w$}", e)?;
             }
@@ -238,6 +227,17 @@ impl Display for Expression {
                 writeln!(f, "{:w$}Comparison ({:?}):", "", op)?;
                 write!(f, "{:width$}", t, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
+            }
+            Self::IfElse(cond, body, else_) => {
+                writeln!(f, "{:w$}IfElse:", "")?;
+                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", else_, width = w + INDENT_INCREASE)?;
+            }
+            Self::While(cond, body) => {
+                writeln!(f, "{:w$}While:", "")?;
+                write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
         }
         Ok(())

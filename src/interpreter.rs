@@ -290,13 +290,14 @@ impl Eval for AstNode {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
             Self::Statement(statement) => statement.eval(ctx.clone()),
-            // Self::Expression(expr) => expr.eval(ctx.clone()),
+            Self::Expression(expr) => expr.eval(ctx.clone()),
             // Self::Block(block) => block.eval(ctx.clone()),
         }
     }
 }
 
 impl Eval for Statement {
+    // TODO: Statements should not return values but this works until expressions are allowed as AstNode
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
             Self::Declaration(lhs, rhs) => {
@@ -317,19 +318,6 @@ impl Eval for Statement {
                 } else {
                     Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()).into())
                 }
-            }
-            Self::IfElse(cond, body, else_) => {
-                if cond.eval(ctx.clone())?.boolean()? {
-                    body.eval(ctx.clone())
-                } else {
-                    else_.eval(ctx.clone())
-                }
-            }
-            Self::While(cond, body) => {
-                while cond.eval(ctx.clone())?.boolean()? {
-                    body.eval(ctx.clone())?;
-                }
-                Ok(RuntimeValue::None)
             }
             Self::Expression(expr) => expr.eval(ctx.clone()),
         }
@@ -361,6 +349,20 @@ impl Eval for Expression {
                     lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx.clone())?.int()?
                 }
             }),
+            Self::IfElse(cond, body, else_block) => {
+                if cond.eval(ctx.clone())?.boolean()? {
+                    body.eval(ctx.clone())?
+                } else {
+                    else_block.eval(ctx.clone())?
+                }
+            }
+            Self::While(cond, body) => {
+                let mut ret = RuntimeValue::None;
+                while cond.eval(ctx.clone())?.boolean()? {
+                    ret = body.eval(ctx.clone())?;
+                }
+                ret
+            }
             Self::Term(term) => term.eval(ctx.clone())?,
         })
     }
@@ -463,10 +465,11 @@ impl Eval for Factor {
 impl Eval for Block {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         let Self(vec) = self;
+        let mut ret = RuntimeValue::None;
         for node in vec {
-            node.eval(ctx.clone())?;
+            ret = node.eval(ctx.clone())?;
         }
-        Ok(RuntimeValue::None)
+        Ok(ret)
     }
 }
 
