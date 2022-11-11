@@ -22,7 +22,9 @@ mod tests {
             } else { 
                 return := "FALSE"; 
             }; 
-        }; 
+            return
+        };
+        return
     }();
     v := x(99);
     let y = x;

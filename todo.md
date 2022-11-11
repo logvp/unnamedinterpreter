@@ -34,7 +34,7 @@
   - [x] Enumerated error types
   - [ ] Location + snippet
 - [ ] Rework `Context` + scope
-  - [ ] More "proper" return values(?)
+  - [ ] ~~More "proper" return values(?)~~
   - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
 - [x] No longer evaluate statements to values
@@ -42,9 +42,8 @@
 
 ## Bugs
 
-- [x] If return value is undefined, closures will return the return value of the parent environment
+- [x] ~~If return value is undefined, closures will return the return value of the parent environment~~
 - [x] Unary negate operator doesn't work
+- [x] Body of lambdas do not return value of body
 - [ ] `RuntimeValue`: "private type `FunctionType` in public interface"
 - [ ] `loc` in lexer is not accurate
-- [ ] Body of lambdas do not return value of body
-  - Requires revisiting return values

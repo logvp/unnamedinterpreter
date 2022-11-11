@@ -259,10 +259,6 @@ impl Context {
         })
     }
 
-    fn get_from_local(&self, key: &String) -> Option<RuntimeValue> {
-        self.data.borrow().get(key).cloned()
-    }
-
     fn new(parent: Rc<Self>) -> Self {
         Context {
             data: Default::default(),
@@ -419,13 +415,7 @@ impl Eval for Factor {
                             scope.insert(ident.name.to_owned(), val.eval(ctx.clone())?);
                         }
                         let rc = Rc::new(scope);
-                        body.eval(rc.clone())?;
-                        Ok(rc
-                            // Fixes value being returned from outer scope
-                            // TODO: don't let functions modify return values of outer scope
-                            .get_from_local(&"return".to_string())
-                            .unwrap_or(RuntimeValue::None)
-                            .to_owned())
+                        body.eval(rc.clone())
                     }
                     FunctionType::Intrinsic { kind } => match kind {
                         IntrinsicFunction::Print => {
