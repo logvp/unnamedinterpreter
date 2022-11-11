@@ -1,5 +1,5 @@
 use crate::ast;
-use crate::error::{Error, LexerError, SyntaxError};
+use crate::error::{Error, SyntaxError};
 use crate::lexer::{Lexer, Token};
 
 pub struct Parser {
@@ -16,26 +16,36 @@ impl Parser {
 
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
         let mut ast: ast::Ast = Default::default();
-        while self.lexer.has_next() {
-            // println!("{:?}", self.lexer.peek_rest());
-            ast.push(self.parse_ast_node()?);
+        while !self.token()?.kind_eq(&Token::Eof) {
+            let node = self.parse_ast_node()?;
+            match node {
+                ast::AstNode::Statement(_) => ast.push(node),
+                ast::AstNode::Expression(_) => {
+                    ast.push(node);
+                    break;
+                }
+            }
         }
-        Ok(ast)
+        if let Token::Eof = self.token()? {
+            Ok(ast)
+        } else {
+            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
+                ast::ConstructKind::AstNode,
+            ))?
+        }
     }
 
     fn parse_ast_node(&mut self) -> Result<ast::AstNode, Error> {
-        Ok(ast::AstNode::Statement(self.parse_statement()?))
-    }
-
-    fn parse_statement(&mut self) -> Result<ast::Statement, Error> {
-        // println!("parsing statement");
-        let body = match self.token()? {
+        if let Some(statement) = match self.token()? {
             Token::Let => {
                 self.consume();
                 let identifier = self.parse_identifier()?;
                 if let Token::Equal = self.token()? {
                     self.consume();
-                    ast::Statement::Declaration(identifier, self.parse_expression()?)
+                    Some(ast::Statement::Declaration(
+                        identifier,
+                        self.parse_expression()?,
+                    ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
@@ -50,7 +60,7 @@ impl Parser {
                 let lvalue = self.parse_lvalue()?;
                 if let Token::Equal = self.token()? {
                     self.consume();
-                    ast::Statement::Assignment(lvalue, self.parse_expression()?)
+                    Some(ast::Statement::Assignment(lvalue, self.parse_expression()?))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
@@ -60,40 +70,44 @@ impl Parser {
                     .into());
                 }
             }
-            _ => {
-                // Simple Assignment ( = )
-                if let Ok(Token::Equal) = self.peek() {
-                    let lvalue = self.parse_lvalue()?;
-                    self.token()?;
-                    self.consume();
-                    ast::Statement::Assignment(lvalue, self.parse_expression()?)
-                }
-                // Simple Declaration ( := )
-                else if let Ok(Token::ColonEqual) = self.peek() {
-                    let lvalue = self.parse_identifier()?;
-                    self.token()?;
-                    self.consume();
-                    ast::Statement::Declaration(lvalue, self.parse_expression()?)
-                } else {
-                    ast::Statement::Expression(self.parse_expression()?)
-                }
+            Token::Identifier(_) if self.peek()?.kind_eq(&Token::ColonEqual) => {
+                let identifier = self.parse_identifier()?;
+                // consume `:=`
+                self.token()?;
+                self.consume();
+                Some(ast::Statement::Declaration(
+                    identifier,
+                    self.parse_expression()?,
+                ))
             }
-        };
+            // TODO: Only checks for identifier not for Lvalue
+            Token::Identifier(_) if self.peek()?.kind_eq(&Token::Equal) => {
+                let lvalue = self.parse_lvalue()?;
+                // consume `=`
+                self.token()?;
+                self.consume();
+                Some(ast::Statement::Assignment(lvalue, self.parse_expression()?))
+            }
+            _ => None,
+        } {
+            self.expect_semicolon()?;
+            return Ok(ast::AstNode::Statement(statement));
+        }
+        // Let, Set, SimpleDeclaration, SimpleAssignment cases are covered
+        // Statement::Expression and Expression need to be handled
+        let expression = self.parse_expression()?;
+
         if let Token::Semicolon = self.token()? {
             self.consume();
-            return Ok(body);
+            Ok(ast::AstNode::Statement(ast::Statement::Expression(
+                expression,
+            )))
         } else {
-            return Err(SyntaxError::ExpectedTokenIn(
-                Token::Semicolon,
-                self.token()?,
-                ast::ConstructKind::Statement,
-            )
-            .into());
+            Ok(ast::AstNode::Expression(expression))
         }
     }
 
     fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
-        // println!("parsing expression");
         Ok(match self.token()? {
             Token::If => {
                 self.consume();
@@ -180,7 +194,6 @@ impl Parser {
     }
 
     fn parse_term(&mut self) -> Result<ast::Term, Error> {
-        // println!("parsing term");
         let lhs: ast::Factor = self.parse_factor()?;
         Ok(match self.token()? {
             Token::Star => {
@@ -200,10 +213,7 @@ impl Parser {
     }
 
     fn parse_factor(&mut self) -> Result<ast::Factor, Error> {
-        // println!("parsing factor");
-        // println!("rest: {:?}", self.lexer.peek_rest());
         let factor = match self.token()? {
-            // Token::Identifier(id) => {self.advance_token();ast::Factor(ast::Identifier(id))},
             Token::Lambda => self.parse_lambda_expression()?,
             Token::LeftParen => {
                 ast::Factor::Expression(Box::new(self.parse_parenthetical_expression()?))
@@ -227,8 +237,6 @@ impl Parser {
         } else {
             Ok(factor)
         }
-
-        // todo!()
     }
 
     fn parse_parenthetical_expression(&mut self) -> Result<ast::Expression, Error> {
@@ -247,7 +255,9 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Result<ast::Block, Error> {
-        if !self.token()?.kind_eq(&Token::LeftBrace) {
+        if let Token::LeftBrace = self.token()? {
+            self.consume();
+        } else {
             return Err(SyntaxError::ExpectedTokenIn(
                 Token::LeftBrace,
                 self.token()?,
@@ -255,32 +265,46 @@ impl Parser {
             )
             .into());
         }
-        self.consume();
         let mut block: Vec<ast::AstNode> = Default::default();
         while !self.token()?.kind_eq(&Token::RightBrace) {
-            block.push(self.parse_ast_node()?);
+            let node = self.parse_ast_node()?;
+            match node {
+                ast::AstNode::Statement(_) => {
+                    block.push(node);
+                }
+                ast::AstNode::Expression(_) => {
+                    block.push(node);
+                    break;
+                }
+            }
         }
-        self.consume();
+        if let Token::RightBrace = self.token()? {
+            self.consume();
+        } else {
+            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
+                ast::ConstructKind::Block,
+            ))?
+        }
 
         Ok(ast::Block(block))
     }
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
-        if !self.token()?.kind_eq(&Token::Lambda) {
+        if let Token::Lambda = self.token()? {
+            self.consume();
+        } else {
             return Err(SyntaxError::ExpectedToken(Token::Lambda, self.token()?).into());
         }
-        // println!("got lambda keyword");
-        self.consume();
         let mut params: Vec<ast::Identifier> = Default::default();
-        if !self.token()?.kind_eq(&Token::LeftParen) {
+        if let Token::LeftParen = self.token()? {
+            self.consume();
+        } else {
             return Err(SyntaxError::ExpectedConstructIn(
                 ast::ConstructKind::ParameterList,
                 ast::ConstructKind::Lambda,
             )
             .into());
         }
-        self.consume();
-        // TODO: this feels too complicated
         while !self.token()?.kind_eq(&Token::RightParen) {
             params.push(self.parse_identifier()?);
             if let Token::Comma = self.token()? {
@@ -313,7 +337,6 @@ impl Parser {
 
     fn parse_function_args(&mut self) -> Result<Vec<ast::Expression>, Error> {
         if let Token::LeftParen = self.token()? {
-            // // println!("{:?}", self.token()?);
             self.consume();
             let mut args: Vec<ast::Expression> = Default::default();
             while !self.token()?.kind_eq(&Token::RightParen) {
@@ -356,13 +379,25 @@ impl Parser {
         }
     }
 
+    fn expect_semicolon(&mut self) -> Result<(), Error> {
+        if let Token::Semicolon = self.token()? {
+            self.consume();
+            Ok(())
+        } else {
+            Err(SyntaxError::ExpectedTokenIn(
+                Token::Semicolon,
+                self.token()?,
+                ast::ConstructKind::Statement,
+            )
+            .into())
+        }
+    }
+
     fn token(&mut self) -> Result<Token, Error> {
         if self.token.is_none() {
             self.advance_token()?;
         }
-        let r = self.token.clone().unwrap();
-        // println!("{:?}", r);
-        Ok(r)
+        Ok(self.token.clone().unwrap())
     }
 
     fn peek(&mut self) -> Result<Token, Error> {
@@ -379,13 +414,10 @@ impl Parser {
     }
 
     fn advance_token(&mut self) -> Result<(), Error> {
-        // let loc = self.lexer.loc();
         self.token = match self.lexer.next_token() {
             Ok(v) => Some(v),
-            Err(LexerError::Eof) => Some(Token::Eof),
             Err(e) => Err(e)?,
         };
-        // // println!("{:?} {:?}", self.token, loc);
         Ok(())
     }
 }

@@ -15,7 +15,15 @@ fn main() -> io::Result<()> {
 mod tests {
     const PROGRAM: &str = r#"
     let x = 15;
-    set x = lambda(){ return := lambda (z) { if (z > 0) { return := "TRUE"; } else { return := "FALSE"; }; }; }();
+    set x = lambda () { 
+        return := lambda (z) { 
+            if (z > 0) { 
+                return := "TRUE"; 
+            } else { 
+                return := "FALSE"; 
+            }; 
+        }; 
+    }();
     v := x(99);
     let y = x;
     print(y(-10));

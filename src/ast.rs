@@ -67,8 +67,7 @@ pub enum Statement {
 
 /*
 Expression
-: lambda (Args) { body }
-| Term + Expression
+: Term + Expression
 | Term - Expression
 | Term Comparison Expression
 | Term
@@ -115,7 +114,7 @@ Factor
 | Identifier
 | ( Expression )
 | - Factor
-| lambda ( Identifier* ) { Statement* }
+| lambda ( Identifier* ) Block
 | Factor ( Expression* )
 ;
 */

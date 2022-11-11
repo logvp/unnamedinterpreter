@@ -48,7 +48,7 @@ impl Display for Error {
 
 #[derive(Debug)]
 pub enum LexerError {
-    Eof,
+    // Eof,
     UnknownToken(String, Loc),
 }
 
@@ -60,6 +60,7 @@ pub enum SyntaxError {
     ExpectedConstruct(ConstructKind),
     ExpectedConstructIn(ConstructKind, ConstructKind),
     UnexpectedToken(lexer::Token),
+    ExpressionMayOnlyComeAtEndIn(ConstructKind),
 }
 
 #[derive(Debug)]
@@ -73,7 +74,6 @@ pub enum RuntimeError {
 impl Display for LexerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Eof => write!(f, "Reached end of file"),
             Self::UnknownToken(tok, loc) => write!(f, "Unknown token {} at {}", tok, loc),
         }
     }
@@ -109,6 +109,9 @@ impl Display for SyntaxError {
             }
             Self::UnexpectedToken(found) => {
                 write!(f, "Unexpected token {found}")
+            }
+            Self::ExpressionMayOnlyComeAtEndIn(ort) => {
+                write!(f, "Expression may only be in final position of {ort}")
             }
         }
     }

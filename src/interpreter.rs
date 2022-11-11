@@ -297,14 +297,12 @@ impl Eval for AstNode {
 }
 
 impl Eval for Statement {
-    // TODO: Statements should not return values but this works until expressions are allowed as AstNode
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
             Self::Declaration(lhs, rhs) => {
                 if !ctx.contains_in_scope(&lhs.name) {
                     let value = rhs.eval(ctx.clone())?;
                     ctx.insert(lhs.name.clone(), value);
-                    Ok(RuntimeValue::None)
                 } else {
                     Err(RuntimeError::VariableAlreadyDeclared(lhs.name.clone()))?
                 }
@@ -314,13 +312,15 @@ impl Eval for Statement {
                     let value = rhs.eval(ctx.clone())?;
                     ctx.update(lhs.name().unwrap().clone(), value)
                         .expect("could not update value");
-                    Ok(RuntimeValue::None)
                 } else {
-                    Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()).into())
+                    Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()))?
                 }
             }
-            Self::Expression(expr) => expr.eval(ctx.clone()),
-        }
+            Self::Expression(expr) => {
+                expr.eval(ctx.clone())?;
+            }
+        };
+        Ok(RuntimeValue::None)
     }
 }
 

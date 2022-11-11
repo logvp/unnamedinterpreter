@@ -120,27 +120,16 @@ impl Lexer {
         self.loc.col += update; // TODO: Doesn't handle newlines
     }
 
-    // // Proxy for debugging purposes
-    // pub fn next_token(&mut self) -> Result<Token, LexerError> {
-    //     let r = self.debug_next_token();
-    //     println!("TOKEN: {:?}", r);
-    //     r
-    // }
-
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         if !self.has_next() {
             if self.cursor == self.text.len() - 1 {
                 self.cursor += 1;
-                return Ok(Token::Eof);
-            } else {
-                return Err(LexerError::Eof);
             }
         }
         // text = string[cursor:]
         let text: String = self.text.split_at(self.cursor).1.to_owned();
-        // println!("STRING: \"{}\"", text.trim_end());
         if text.len() == 0 {
-            return Err(LexerError::Eof);
+            return Ok(Token::Eof);
         }
         let mut match_token_pattern = |pattern, fun: fn(&str) -> Token| {
             if let Some(mat) = find(pattern, &text) {
@@ -177,7 +166,6 @@ impl Lexer {
         if let Some(mat) = find(r"^\s+", &text) {
             let delta = mat.end();
             self.move_cursor(delta);
-            // either this or return whitespace error?
             return self.next_token();
         }
         // grab integers
@@ -259,8 +247,8 @@ impl Lexer {
         let mut tokens: Vec<Token> = Default::default();
         while self.has_next() {
             match self.next_token() {
+                Ok(Token::Eof) => break,
                 Ok(token) => tokens.push(token),
-                Err(LexerError::Eof) => break,
                 Err(error) => return Err(error),
             }
         }

@@ -17,7 +17,7 @@
   - [x] `if` expressions
   - [x] `while` expressions
   - [ ] Blocks as expressions
-  - [ ] Allow expressions in `AstNode`s
+  - [x] Allow expressions in `AstNode`s
 - [ ] Arrays
 - [ ] User defined types
 - [ ] Immutable variables
@@ -37,8 +37,7 @@
   - [ ] More "proper" return values(?)
   - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
-- [ ] Allow expressions as AstNodes
-- [ ] No longer evaluate statements to values
+- [x] No longer evaluate statements to values
 
 ## Bugs
 
@@ -46,3 +45,5 @@
 - [x] Unary negate operator doesn't work
 - [ ] `RuntimeValue`: "private type `FunctionType` in public interface"
 - [ ] `loc` in lexer is not accurate
+- [ ] Body of lambdas do not return value of body
+  - Requires revisiting return values
