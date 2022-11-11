@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::interpreter::{Interpreter, RuntimeValue};
 use std::collections::HashMap;
 use std::io;
@@ -9,7 +10,9 @@ pub struct Repl<I: BufRead, O: Write> {
     output: O,
     macros: HashMap<String, String>,
     name: String,
-    buffer: String,
+    macro_buffer: String,
+    multiline_buffer: String,
+    multiline: bool,
     recording: bool,
 }
 impl<I: BufRead, O: Write> Repl<I, O> {
@@ -20,7 +23,9 @@ impl<I: BufRead, O: Write> Repl<I, O> {
             output: output,
             macros: HashMap::new(),
             name: String::new(),
-            buffer: String::new(),
+            macro_buffer: String::new(),
+            multiline_buffer: String::new(),
+            multiline: false,
             recording: false,
         }
     }
@@ -30,7 +35,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         Ok(())
     }
 
-    fn repl_command(&mut self, line: &String) -> io::Result<bool> {
+    fn repl_command(&mut self, line: &str) -> io::Result<bool> {
         fn repl_help<O: Write>(output: &mut O) -> io::Result<()> {
             writeln!(
                 output,
@@ -70,6 +75,8 @@ impl<I: BufRead, O: Write> Repl<I, O> {
                 self.macros.get(words.next().unwrap())
             )?,
             ".PLAY" => self.play_macro(words.next().unwrap().to_string())?,
+            ".{" => self.start_buffering(),
+            ".}" => self.send_buffer()?,
             "." => writeln!(self.output, "REPL: Type `.HELP` for help")?,
             _ => writeln!(
                 self.output,
@@ -79,56 +86,71 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         Ok(true)
     }
     fn start_recording(&mut self, name: String) {
-        self.buffer.clear();
+        self.macro_buffer.clear();
         self.name = name.to_string();
         self.recording = true;
     }
     fn stop_recording(&mut self) {
         self.recording = false;
-        self.macros.insert(self.name.clone(), self.buffer.clone());
-        self.buffer.clear();
+        self.macros
+            .insert(self.name.clone(), self.macro_buffer.clone());
+        self.macro_buffer.clear();
         self.name.clear();
     }
     fn play_macro(&mut self, name: String) -> io::Result<()> {
         let playback = self.macros.get(&name).unwrap();
-        for line in playback.lines() {
-            if self.recording {
-                self.buffer.push_str(&line);
-            }
-            let result = self.interpreter.interpret(line.to_owned());
-
-            for ret in result {
-                match ret {
-                    Ok(v) => writeln!(self.output, ": {:?}", v)?,
-                    Err(e) => writeln!(self.output, ": ERROR : {:?}", e)?,
-                }
-            }
-        }
+        let result = self.interpreter.interpret(playback.to_owned());
+        self.print_results(result)?;
         Ok(())
     }
 
+    fn start_buffering(&mut self) {
+        self.multiline_buffer.clear();
+        self.multiline = true;
+    }
+    fn send_buffer(&mut self) -> io::Result<()> {
+        if !self.multiline {
+            writeln!(self.output, "REPL: `.{{` must come before `.}}`")?;
+            return Ok(());
+        }
+        let result = self.interpreter.interpret(self.multiline_buffer.clone());
+        self.print_results(result)?;
+        self.multiline = false;
+        self.multiline_buffer.clear();
+        Ok(())
+    }
     fn repl_line(&mut self) -> io::Result<bool> {
         let mut buffer = String::new();
-        write!(self.output, "> ")?;
+        if self.multiline {
+            write!(self.output, r"\ ")?;
+        } else {
+            write!(self.output, r"> ")?;
+        }
         self.output.flush()?;
         self.input.read_line(&mut buffer)?;
         if buffer.starts_with('.') {
             return self.repl_command(&buffer);
+        } else if self.multiline {
+            self.multiline_buffer += &buffer;
         } else {
             if self.recording {
-                self.buffer.push_str(&buffer);
+                self.macro_buffer.push_str(&buffer);
             }
             let result = self.interpreter.interpret(buffer);
-
-            for ret in result {
-                match ret {
-                    Ok(RuntimeValue::None) => (),
-                    Ok(v) => writeln!(self.output, ": {}", v)?,
-                    Err(e) => writeln!(self.output, ": ERROR : {}", e)?,
-                }
-            }
+            self.print_results(result)?;
         }
         Ok(true)
+    }
+
+    fn print_results(&mut self, result: Vec<Result<RuntimeValue, Error>>) -> io::Result<()> {
+        for ret in result {
+            match ret {
+                Ok(RuntimeValue::None) => (),
+                Ok(v) => writeln!(self.output, ": {}", v)?,
+                Err(e) => writeln!(self.output, ": ERROR : {}", e)?,
+            }
+        }
+        Ok(())
     }
 }
 

@@ -13,6 +13,7 @@
 
 ## Features
 
+- [x] Multiline REPL statements
 - [ ] Everything expression bases
   - [x] `if` expressions
   - [x] `while` expressions
@@ -22,7 +23,6 @@
 - [ ] User defined types
 - [ ] Immutable variables
 - [ ] Early return
-- [ ] Multiline REPL statements
 - [ ] Comments
 - [ ] Negation operator
 - [ ] Question "not null" operator
@@ -38,6 +38,7 @@
   - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
 - [x] No longer evaluate statements to values
+- [ ] Get rid of REPL macros
 
 ## Bugs
 

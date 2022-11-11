@@ -122,9 +122,10 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         if !self.has_next() {
-            if self.cursor == self.text.len() - 1 {
-                self.cursor += 1;
-            }
+            // if self.cursor == self.text.len() - 1 {
+            //     self.cursor += 1;
+            // }
+            return Ok(Token::Eof);
         }
         // text = string[cursor:]
         let text: String = self.text.split_at(self.cursor).1.to_owned();
