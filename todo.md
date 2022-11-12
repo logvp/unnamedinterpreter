@@ -30,6 +30,7 @@
 ## Improvements
 
 - [x] Call lambda without binding to variable name
+- [x] else if
 - [ ] Better error reporting
   - [x] Enumerated error types
   - [ ] Location + snippet

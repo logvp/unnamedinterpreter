@@ -1,4 +1,4 @@
-use crate::ast::ConstructKind;
+use crate::ast::Construct;
 use crate::lexer;
 use std::fmt::Display;
 
@@ -55,11 +55,11 @@ pub enum LexerError {
 #[derive(Debug)]
 pub enum SyntaxError {
     ExpectedToken(lexer::Token, lexer::Token),
-    ExpectedTokenIn(lexer::Token, lexer::Token, ConstructKind),
+    ExpectedTokenIn(lexer::Token, lexer::Token, Construct),
     ExpectedTheseButFound(Vec<lexer::Token>, lexer::Token),
-    ExpectedConstructIn(ConstructKind, ConstructKind),
+    ExpectedConstructIn(Construct, Construct),
     UnexpectedToken(lexer::Token),
-    ExpressionMayOnlyComeAtEndIn(ConstructKind),
+    ExpressionMayOnlyComeAtEndIn(Construct),
 }
 
 #[derive(Debug)]

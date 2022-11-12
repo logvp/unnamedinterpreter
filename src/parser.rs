@@ -30,7 +30,7 @@ impl Parser {
             Ok(ast)
         } else {
             Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
-                ast::ConstructKind::AstNode,
+                ast::Construct::AstNode,
             ))?
         }
     }
@@ -50,7 +50,7 @@ impl Parser {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
                         self.token()?,
-                        ast::ConstructKind::Let,
+                        ast::Construct::Let,
                     )
                     .into());
                 }
@@ -65,7 +65,7 @@ impl Parser {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
                         self.token()?,
-                        ast::ConstructKind::Set,
+                        ast::Construct::Set,
                     )
                     .into());
                 }
@@ -109,22 +109,10 @@ impl Parser {
 
     fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
         Ok(match self.token()? {
-            Token::If => {
-                self.consume();
-                let cond = self.parse_parenthetical_expression()?;
-                let body = self.parse_block()?;
-                // TODO: else if
-                let else_ = if let Token::Else = self.token()? {
-                    self.consume();
-                    self.parse_block()?
-                } else {
-                    Default::default()
-                };
-                ast::Expression::IfElse(Box::new(cond), body, else_)
-            }
+            Token::If => self.parse_if_expression()?,
             Token::While => {
                 self.consume();
-                let cond = self.parse_parenthetical_expression()?;
+                let cond = self.parse_parenthetical_expression(ast::Construct::While)?;
                 let body = self.parse_block()?;
                 ast::Expression::While(Box::new(cond), body)
             }
@@ -215,9 +203,9 @@ impl Parser {
     fn parse_factor(&mut self) -> Result<ast::Factor, Error> {
         let factor = match self.token()? {
             Token::Lambda => self.parse_lambda_expression()?,
-            Token::LeftParen => {
-                ast::Factor::Expression(Box::new(self.parse_parenthetical_expression()?))
-            }
+            Token::LeftParen => ast::Factor::Expression(Box::new(
+                self.parse_parenthetical_expression(ast::Construct::Expression)?,
+            )),
             Token::Minus => {
                 self.consume();
                 ast::Factor::Negate(Box::new(self.parse_factor()?))
@@ -239,7 +227,10 @@ impl Parser {
         }
     }
 
-    fn parse_parenthetical_expression(&mut self) -> Result<ast::Expression, Error> {
+    fn parse_parenthetical_expression(
+        &mut self,
+        ort: ast::Construct,
+    ) -> Result<ast::Expression, Error> {
         if let Token::LeftParen = self.token()? {
             self.consume();
             let parenthesized = self.parse_expression()?;
@@ -247,10 +238,18 @@ impl Parser {
                 self.consume();
                 Ok(parenthesized)
             } else {
-                Err(SyntaxError::ExpectedToken(Token::RightParen, self.token()?))?
+                Err(SyntaxError::ExpectedTokenIn(
+                    Token::RightParen,
+                    self.token()?,
+                    ort,
+                ))?
             }
         } else {
-            Err(SyntaxError::ExpectedToken(Token::LeftParen, self.token()?))?
+            Err(SyntaxError::ExpectedTokenIn(
+                Token::LeftParen,
+                self.token()?,
+                ort,
+            ))?
         }
     }
 
@@ -261,7 +260,7 @@ impl Parser {
             return Err(SyntaxError::ExpectedTokenIn(
                 Token::LeftBrace,
                 self.token()?,
-                ast::ConstructKind::Block,
+                ast::Construct::Block,
             )
             .into());
         }
@@ -282,11 +281,35 @@ impl Parser {
             self.consume();
         } else {
             Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
-                ast::ConstructKind::Block,
+                ast::Construct::Block,
             ))?
         }
 
         Ok(ast::Block(block))
+    }
+
+    fn parse_if_expression(&mut self) -> Result<ast::Expression, Error> {
+        if let Token::If = self.token()? {
+            self.consume();
+        } else {
+            unreachable!()
+        }
+        let cond = self.parse_parenthetical_expression(ast::Construct::If)?;
+        let body = self.parse_block()?;
+        // TODO: else if
+        let else_ = match self.token()? {
+            // else if
+            Token::Else if self.peek()?.kind_eq(&Token::If) => {
+                self.consume();
+                ast::Block(vec![ast::AstNode::Expression(self.parse_if_expression()?)])
+            }
+            Token::Else => {
+                self.consume();
+                self.parse_block()?
+            }
+            _ => Default::default(),
+        };
+        Ok(ast::Expression::IfElse(Box::new(cond), body, else_))
     }
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
@@ -300,8 +323,8 @@ impl Parser {
             self.consume();
         } else {
             return Err(SyntaxError::ExpectedConstructIn(
-                ast::ConstructKind::ParameterList,
-                ast::ConstructKind::Lambda,
+                ast::Construct::ParameterList,
+                ast::Construct::Lambda,
             )
             .into());
         }
@@ -360,7 +383,7 @@ impl Parser {
             Err(SyntaxError::ExpectedTokenIn(
                 Token::LeftParen,
                 self.token()?,
-                ast::ConstructKind::FunctionCall,
+                ast::Construct::FunctionCall,
             )
             .into())
         }
@@ -387,7 +410,7 @@ impl Parser {
             Err(SyntaxError::ExpectedTokenIn(
                 Token::Semicolon,
                 self.token()?,
-                ast::ConstructKind::Statement,
+                ast::Construct::Statement,
             )
             .into())
         }

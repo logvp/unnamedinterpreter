@@ -4,7 +4,7 @@ use std::{
 };
 
 #[derive(Debug)]
-pub enum ConstructKind {
+pub enum Construct {
     Ast,
     AstNode,
     Block,
@@ -19,6 +19,8 @@ pub enum ConstructKind {
     Literal,
     FunctionCall,
     ParameterList,
+    If,
+    While,
     Lambda,
 }
 
@@ -334,7 +336,7 @@ impl Display for Lvalue {
         Ok(())
     }
 }
-impl Display for ConstructKind {
+impl Display for Construct {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -354,6 +356,8 @@ impl Display for ConstructKind {
                 Self::Literal => "Literal",
                 Self::FunctionCall => "Function Call",
                 Self::ParameterList => "Parameter List",
+                Self::If => "If Expression",
+                Self::While => "While Expression",
                 Self::Lambda => "Lambda Expression",
             }
         )
