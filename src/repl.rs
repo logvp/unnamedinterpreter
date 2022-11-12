@@ -87,7 +87,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     }
     fn start_recording(&mut self, name: String) {
         self.macro_buffer.clear();
-        self.name = name.to_string();
+        self.name = name;
         self.recording = true;
     }
     fn stop_recording(&mut self) {

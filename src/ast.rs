@@ -148,9 +148,9 @@ pub struct Identifier {
 
 #[derive(Debug, Clone)]
 pub enum Literal {
-    IntLiteral(i32),
-    StringLiteral(String),
-    BooleanLiteral(bool),
+    Integer(i32),
+    String(String),
+    Boolean(bool),
 }
 
 const INDENT_INCREASE: usize = 2;

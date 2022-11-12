@@ -122,14 +122,11 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
         if !self.has_next() {
-            // if self.cursor == self.text.len() - 1 {
-            //     self.cursor += 1;
-            // }
             return Ok(Token::Eof);
         }
         // text = string[cursor:]
         let text: String = self.text.split_at(self.cursor).1.to_owned();
-        if text.len() == 0 {
+        if text.is_empty() {
             return Ok(Token::Eof);
         }
         let mut match_token_pattern = |pattern, fun: fn(&str) -> Token| {
@@ -170,14 +167,14 @@ impl Lexer {
             return self.next_token();
         }
         // grab integers
-        let t: Option<Token> = match_token_pattern(r"^\d+", |mat| {
+        match_token_pattern(r"^\d+", |mat| {
             let int: i32 = mat.parse().unwrap();
-            Token::Literal(Literal::IntLiteral(int))
+            Token::Literal(Literal::Integer(int))
         }).
         // grab quotes
         // TODO: Handle escape characters
         or_else(|| match_token_pattern(r#"^"[^"]*""#, |mat| {
-            Token::Literal(Literal::StringLiteral(
+            Token::Literal(Literal::String(
                 mat.strip_prefix('"')
                     .unwrap()
                     .strip_suffix('"')
@@ -192,8 +189,8 @@ impl Lexer {
         or_else(|| match_token_pattern(r"^if\b", |_| Token::If)).
         or_else(|| match_token_pattern(r"^else\b", |_| Token::Else)).
         or_else(|| match_token_pattern(r"^lambda\b", |_| Token::Lambda)).
-        or_else(|| match_token_pattern(r"^true\b", |_| Token::Literal(Literal::BooleanLiteral(true)))).
-        or_else(|| match_token_pattern(r"^false\b", |_| Token::Literal(Literal::BooleanLiteral(false)))).
+        or_else(|| match_token_pattern(r"^true\b", |_| Token::Literal(Literal::Boolean(true)))).
+        or_else(|| match_token_pattern(r"^false\b", |_| Token::Literal(Literal::Boolean(false)))).
         // identifiers
         or_else(|| match_token_pattern(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) })).
         // anything else that couldn't be confused for an identifier
@@ -230,9 +227,8 @@ impl Lexer {
                 }
             }
             None
-        });
-
-        return t.ok_or_else(|| {
+        }).
+        ok_or_else(|| {
             LexerError::UnknownToken(
                 if let Some(mat) = find(r"[^\s]+", &text) {
                     mat.as_str().to_owned()
@@ -241,10 +237,12 @@ impl Lexer {
                 },
                 self.loc,
             )
-        });
+        })
     }
 
-    pub fn get_all_tokens(&mut self) -> Result<Vec<Token>, LexerError> {
+    pub fn peek_rest(&mut self) -> Result<Vec<Token>, LexerError> {
+        let cursor = self.cursor;
+        let loc = self.loc;
         let mut tokens: Vec<Token> = Default::default();
         while self.has_next() {
             match self.next_token() {
@@ -253,14 +251,9 @@ impl Lexer {
                 Err(error) => return Err(error),
             }
         }
-        Ok(tokens)
-    }
-
-    pub fn peek_rest(&mut self) -> Result<Vec<Token>, LexerError> {
-        let cursor = self.cursor;
-        let tokens = self.get_all_tokens();
+        self.loc = loc;
         self.cursor = cursor;
-        tokens
+        Ok(tokens)
     }
 
     pub fn peek(&mut self) -> Result<Token, LexerError> {

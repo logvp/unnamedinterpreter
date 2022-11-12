@@ -45,5 +45,5 @@
 - [x] ~~If return value is undefined, closures will return the return value of the parent environment~~
 - [x] Unary negate operator doesn't work
 - [x] Body of lambdas do not return value of body
-- [ ] `RuntimeValue`: "private type `FunctionType` in public interface"
+- [x] `RuntimeValue`: "private type `FunctionType` in public interface"
 - [ ] `loc` in lexer is not accurate

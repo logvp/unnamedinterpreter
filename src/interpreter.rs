@@ -10,7 +10,7 @@ use crate::parser::Parser;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Function(Rc<FunctionType>), // TODO: Fix this somehow
+    Function(Rc<Function>),
     Integer(i32),
     String(String),
     Boolean(bool),
@@ -85,11 +85,7 @@ impl PartialEq for RuntimeValue {
                 }
             }
             Self::None => {
-                if let Self::None = other {
-                    true
-                } else {
-                    false
-                }
+                matches!(other, Self::None)
             }
         }
     }
@@ -138,6 +134,9 @@ impl RuntimeValue {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct Function(FunctionType);
 
 #[derive(Debug)]
 enum FunctionType {
@@ -201,21 +200,21 @@ impl Context {
         };
         global.insert(
             "print".to_string(),
-            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::Print,
-            })),
+            }))),
         );
         global.insert(
             "typeof".to_string(),
-            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::TypeOf,
-            })),
+            }))),
         );
         global.insert(
             "debug".to_string(),
-            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic {
+            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::Debug,
-            })),
+            }))),
         );
 
         global
@@ -285,9 +284,8 @@ trait Eval {
 impl Eval for AstNode {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
-            Self::Statement(statement) => statement.eval(ctx.clone()),
-            Self::Expression(expr) => expr.eval(ctx.clone()),
-            // Self::Block(block) => block.eval(ctx.clone()),
+            Self::Statement(statement) => statement.eval(ctx),
+            Self::Expression(expr) => expr.eval(ctx),
         }
     }
 }
@@ -313,7 +311,7 @@ impl Eval for Statement {
                 }
             }
             Self::Expression(expr) => {
-                expr.eval(ctx.clone())?;
+                expr.eval(ctx)?;
             }
         };
         Ok(RuntimeValue::None)
@@ -324,32 +322,26 @@ impl Eval for Expression {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         Ok(match self {
             Self::Add(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx)?.int()?)
             }
             Self::Subtract(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx.clone())?.int()?)
+                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx)?.int()?)
             }
             Self::Compare(lhs, rhs, op) => RuntimeValue::Boolean(match op {
-                Comparison::Equal => lhs.eval(ctx.clone())? == rhs.eval(ctx.clone())?,
-                Comparison::NotEqual => lhs.eval(ctx.clone())? != rhs.eval(ctx.clone())?,
-                Comparison::LessThan => {
-                    lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx.clone())?.int()?
-                }
-                Comparison::LessEqual => {
-                    lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx.clone())?.int()?
-                }
-                Comparison::GreaterThan => {
-                    lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx.clone())?.int()?
-                }
+                Comparison::Equal => lhs.eval(ctx.clone())? == rhs.eval(ctx)?,
+                Comparison::NotEqual => lhs.eval(ctx.clone())? != rhs.eval(ctx)?,
+                Comparison::LessThan => lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx)?.int()?,
+                Comparison::LessEqual => lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx)?.int()?,
+                Comparison::GreaterThan => lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx)?.int()?,
                 Comparison::GreaterEqual => {
-                    lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx.clone())?.int()?
+                    lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx)?.int()?
                 }
             }),
             Self::IfElse(cond, body, else_block) => {
                 if cond.eval(ctx.clone())?.boolean()? {
-                    body.eval(ctx.clone())?
+                    body.eval(ctx)?
                 } else {
-                    else_block.eval(ctx.clone())?
+                    else_block.eval(ctx)?
                 }
             }
             Self::While(cond, body) => {
@@ -359,7 +351,7 @@ impl Eval for Expression {
                 }
                 ret
             }
-            Self::Term(term) => term.eval(ctx.clone())?,
+            Self::Term(term) => term.eval(ctx)?,
         })
     }
 }
@@ -368,17 +360,17 @@ impl Eval for Term {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
             Self::Multiply(lhs, rhs) => Ok(RuntimeValue::Integer(
-                lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx.clone())?.int()?,
+                lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx)?.int()?,
             )),
             Self::Divide(lhs, rhs) => Ok(RuntimeValue::Integer(
-                lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx.clone())?.int()?,
+                lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx)?.int()?,
             )),
             Self::Concatenate(lhs, rhs) => Ok(RuntimeValue::String(format!(
                 "{}{}",
                 lhs.eval(ctx.clone())?.string()?,
-                rhs.eval(ctx.clone())?.string()?
+                rhs.eval(ctx)?.string()?
             ))),
-            Self::Factor(factor) => factor.eval(ctx.clone()),
+            Self::Factor(factor) => factor.eval(ctx),
         }
     }
 }
@@ -386,64 +378,67 @@ impl Eval for Term {
 impl Eval for Factor {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match self {
-            Self::Literal(lit) => lit.eval(ctx.clone()),
-            Self::Expression(expr) => expr.eval(ctx.clone()),
-            Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx.clone())?.int()?)),
-            Self::Variable(identifier) => identifier.eval(ctx.clone()),
-            Self::Lambda(param, body) => {
-                Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda {
+            Self::Literal(lit) => lit.eval(ctx),
+            Self::Expression(expr) => expr.eval(ctx),
+            Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx)?.int()?)),
+            Self::Variable(identifier) => identifier.eval(ctx),
+            Self::Lambda(param, body) => Ok(RuntimeValue::Function(Rc::new(Function(
+                FunctionType::Lambda {
                     parent_scope: ctx,
                     parameters: param.to_owned(),
                     body: body.to_owned(),
-                })))
-            }
-            Self::FunctionCall(fun, args) => match fun.eval(ctx.clone())? {
-                RuntimeValue::Function(function) => match function.borrow() {
-                    FunctionType::Lambda {
-                        parent_scope,
-                        parameters,
-                        body,
-                    } => {
-                        let scope = Context::new(parent_scope.clone());
-                        if parameters.len() != args.len() {
-                            Err(RuntimeError::ExpectedArgumentsFound(
-                                parameters.len(),
-                                args.len(),
-                            ))?
-                        }
-                        for (ident, val) in parameters.iter().zip(args.iter()) {
-                            scope.insert(ident.name.to_owned(), val.eval(ctx.clone())?);
-                        }
-                        let rc = Rc::new(scope);
-                        body.eval(rc.clone())
-                    }
-                    FunctionType::Intrinsic { kind } => match kind {
-                        IntrinsicFunction::Print => {
-                            for arg in args {
-                                print!("{} ", arg.eval(ctx.clone())?)
-                            }
-                            println!("");
-                            Ok(RuntimeValue::None)
-                        }
-                        IntrinsicFunction::TypeOf => {
-                            if args.len() != 1 {
-                                Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
-                            } else {
-                                Ok(RuntimeValue::String(format!(
-                                    "{}",
-                                    args[0].eval(ctx.clone())?.get_type()
-                                )))
-                            }
-                        }
-                        IntrinsicFunction::Debug => {
-                            for arg in args {
-                                print!("{:?} ", arg.eval(ctx.clone())?)
-                            }
-                            println!("");
-                            Ok(RuntimeValue::None)
-                        }
-                    },
                 },
+            )))),
+            Self::FunctionCall(fun, args) => match fun.eval(ctx.clone())? {
+                RuntimeValue::Function(f) => {
+                    let Function(function) = f.borrow();
+                    match function {
+                        FunctionType::Lambda {
+                            parent_scope,
+                            parameters,
+                            body,
+                        } => {
+                            let scope = Context::new(parent_scope.clone());
+                            if parameters.len() != args.len() {
+                                Err(RuntimeError::ExpectedArgumentsFound(
+                                    parameters.len(),
+                                    args.len(),
+                                ))?
+                            }
+                            for (ident, val) in parameters.iter().zip(args.iter()) {
+                                scope.insert(ident.name.to_owned(), val.eval(ctx.clone())?);
+                            }
+
+                            body.eval(Rc::new(scope))
+                        }
+                        FunctionType::Intrinsic { kind } => match kind {
+                            IntrinsicFunction::Print => {
+                                for arg in args {
+                                    print!("{} ", arg.eval(ctx.clone())?)
+                                }
+                                println!();
+                                Ok(RuntimeValue::None)
+                            }
+                            IntrinsicFunction::TypeOf => {
+                                if args.len() != 1 {
+                                    Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
+                                } else {
+                                    Ok(RuntimeValue::String(format!(
+                                        "{}",
+                                        args[0].eval(ctx)?.get_type()
+                                    )))
+                                }
+                            }
+                            IntrinsicFunction::Debug => {
+                                for arg in args {
+                                    print!("{:?} ", arg.eval(ctx.clone())?)
+                                }
+                                println!();
+                                Ok(RuntimeValue::None)
+                            }
+                        },
+                    }
+                }
                 x => {
                     Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into())
                 }
@@ -466,9 +461,9 @@ impl Eval for Block {
 impl Eval for Literal {
     fn eval(&self, _: Rc<Context>) -> InterpreterReturn {
         match self {
-            Self::IntLiteral(int) => Ok(RuntimeValue::Integer(*int)),
-            Self::StringLiteral(string) => Ok(RuntimeValue::String(string.to_owned())),
-            Self::BooleanLiteral(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
+            Self::Integer(int) => Ok(RuntimeValue::Integer(*int)),
+            Self::String(string) => Ok(RuntimeValue::String(string.to_owned())),
+            Self::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
     }
 }
@@ -476,7 +471,7 @@ impl Eval for Literal {
 impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
         match ctx.get(&self.name) {
-            Some(val) => Ok(val.clone()),
+            Some(val) => Ok(val),
             None => Err(RuntimeError::UnknownIdentifier(self.name.to_owned()).into()),
         }
     }

@@ -17,31 +17,31 @@ impl Display for Loc {
 
 #[derive(Debug)]
 pub enum Error {
-    LexerError(LexerError),
-    SyntaxError(SyntaxError),
-    RuntimeError(RuntimeError),
+    Lexer(LexerError),
+    Syntax(SyntaxError),
+    Runtime(RuntimeError),
 }
 impl From<LexerError> for Error {
     fn from(e: LexerError) -> Self {
-        Error::LexerError(e)
+        Error::Lexer(e)
     }
 }
 impl From<SyntaxError> for Error {
     fn from(e: SyntaxError) -> Self {
-        Error::SyntaxError(e)
+        Error::Syntax(e)
     }
 }
 impl From<RuntimeError> for Error {
     fn from(e: RuntimeError) -> Self {
-        Error::RuntimeError(e)
+        Error::Runtime(e)
     }
 }
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::LexerError(e) => write!(f, "{}", e),
-            Self::SyntaxError(e) => write!(f, "{}", e),
-            Self::RuntimeError(e) => write!(f, "{}", e),
+            Self::Lexer(e) => write!(f, "{}", e),
+            Self::Syntax(e) => write!(f, "{}", e),
+            Self::Runtime(e) => write!(f, "{}", e),
         }
     }
 }
@@ -57,7 +57,6 @@ pub enum SyntaxError {
     ExpectedToken(lexer::Token, lexer::Token),
     ExpectedTokenIn(lexer::Token, lexer::Token, ConstructKind),
     ExpectedTheseButFound(Vec<lexer::Token>, lexer::Token),
-    ExpectedConstruct(ConstructKind),
     ExpectedConstructIn(ConstructKind, ConstructKind),
     UnexpectedToken(lexer::Token),
     ExpressionMayOnlyComeAtEndIn(ConstructKind),
@@ -92,7 +91,7 @@ impl Display for SyntaxError {
             }
             Self::ExpectedTheseButFound(expected_list, found) => {
                 write!(f, "Expected ")?;
-                let mut iter = expected_list.into_iter();
+                let mut iter = expected_list.iter();
                 if let Some(x) = iter.next() {
                     write!(f, "{}", x)?;
                 }
@@ -100,9 +99,6 @@ impl Display for SyntaxError {
                     write!(f, " or {}", x)?;
                 }
                 write!(f, ", but found {found} instead")
-            }
-            Self::ExpectedConstruct(expected) => {
-                write!(f, "Expected {expected}")
             }
             Self::ExpectedConstructIn(expected, ort) => {
                 write!(f, "While parsing {ort} expected {expected}")
