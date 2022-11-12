@@ -39,7 +39,7 @@
   - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
 - [x] No longer evaluate statements to values
-- [ ] Get rid of REPL macros
+- [ ] Get rid of REPL macros or make them better
 
 ## Bugs
 

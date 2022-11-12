@@ -80,13 +80,29 @@ mod tests {
         }
     }
 
+    fn run_file<P: AsRef<std::path::Path>>(path: &P) {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let result = Interpreter::new().interpret(content);
+            for it in result {
+                println!("{}", it.unwrap());
+            }
+        } else {
+            println!(
+                "Could not open file '{}'",
+                path.as_ref()
+                    .file_name()
+                    .expect("Couldn't open file and can't display file name")
+                    .to_string_lossy()
+            );
+        }
+    }
+
     #[test]
     fn examples() {
-        use crate::repl;
         use std::fs;
 
         for file in fs::read_dir("./examples").unwrap() {
-            repl::run_file(&file.unwrap().path()).unwrap();
+            run_file(&file.unwrap().path());
         }
     }
 }

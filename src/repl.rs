@@ -164,9 +164,7 @@ pub fn init() -> io::Result<()> {
 }
 
 pub fn run_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
-    use std::fs;
-
-    if let Ok(content) = fs::read_to_string(path) {
+    if let Ok(content) = std::fs::read_to_string(path) {
         let result = Interpreter::new().interpret(content);
         Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
     } else {
