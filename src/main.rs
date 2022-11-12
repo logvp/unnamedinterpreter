@@ -5,10 +5,16 @@ mod lexer;
 mod parser;
 mod repl;
 
-use std::io;
+use std::{env, io};
 
 fn main() -> io::Result<()> {
-    repl::init()
+    let filename = env::args().nth(1);
+
+    if let Some(path) = filename {
+        repl::run_file(&path)
+    } else {
+        repl::init()
+    }
 }
 
 #[cfg(test)]
@@ -71,6 +77,16 @@ mod tests {
         println!("--- Results ---");
         for v in ret {
             println!("OK: {:?}", v.unwrap())
+        }
+    }
+
+    #[test]
+    fn examples() {
+        use crate::repl;
+        use std::fs;
+
+        for file in fs::read_dir("./examples").unwrap() {
+            repl::run_file(&file.unwrap().path()).unwrap();
         }
     }
 }

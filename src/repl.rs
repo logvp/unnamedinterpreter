@@ -100,7 +100,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     fn play_macro(&mut self, name: String) -> io::Result<()> {
         let playback = self.macros.get(&name).unwrap();
         let result = self.interpreter.interpret(playback.to_owned());
-        self.print_results(result)?;
+        Self::print_results(&mut self.output, &result)?;
         Ok(())
     }
 
@@ -114,7 +114,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
             return Ok(());
         }
         let result = self.interpreter.interpret(self.multiline_buffer.clone());
-        self.print_results(result)?;
+        Self::print_results(&mut self.output, &result)?;
         self.multiline = false;
         self.multiline_buffer.clear();
         Ok(())
@@ -137,17 +137,17 @@ impl<I: BufRead, O: Write> Repl<I, O> {
                 self.macro_buffer.push_str(&buffer);
             }
             let result = self.interpreter.interpret(buffer);
-            self.print_results(result)?;
+            Self::print_results(&mut self.output, &result)?;
         }
         Ok(true)
     }
 
-    fn print_results(&mut self, result: Vec<Result<RuntimeValue, Error>>) -> io::Result<()> {
+    fn print_results(output: &mut O, result: &Vec<Result<RuntimeValue, Error>>) -> io::Result<()> {
         for ret in result {
             match ret {
                 Ok(RuntimeValue::None) => (),
-                Ok(v) => writeln!(self.output, ": {}", v)?,
-                Err(e) => writeln!(self.output, ": ERROR : {}", e)?,
+                Ok(v) => writeln!(output, ": {}", v)?,
+                Err(e) => writeln!(output, ": ERROR : {}", e)?,
             }
         }
         Ok(())
@@ -161,4 +161,22 @@ pub fn init() -> io::Result<()> {
     let mut repl = Repl::new(stdin, stdout);
     repl.start()?;
     Ok(())
+}
+
+pub fn run_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
+    use std::fs;
+
+    if let Ok(content) = fs::read_to_string(path) {
+        let result = Interpreter::new().interpret(content);
+        Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
+    } else {
+        println!(
+            "Could not open file '{}'",
+            path.as_ref()
+                .file_name()
+                .expect("Couldn't open file and can't display file name")
+                .to_string_lossy()
+        );
+        Ok(())
+    }
 }

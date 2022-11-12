@@ -1,0 +1,19 @@
+let count = 100;
+let i = 1;
+
+let divisible = lambda (a, b) {
+    (a / b) * b == a
+};
+
+while (i <= count) {
+    if (divisible(i, 15)) {
+        print("fizzbuzz");
+    } else if (divisible(i, 3)) {
+        print("fizz");
+    } else if (divisible(i, 5)) {
+        print("buzz");
+    } else {
+        print(i);
+    };
+    i = i + 1;
+};
