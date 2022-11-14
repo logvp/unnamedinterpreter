@@ -9,6 +9,7 @@ pub enum Construct {
     AstNode,
     Block,
     Statement,
+    Var,
     Let,
     Set,
     Expression,
@@ -22,6 +23,8 @@ pub enum Construct {
     If,
     While,
     Lambda,
+    SimpleAssignment,
+    SimpleDeclaration,
 }
 
 #[derive(Debug, Default)]
@@ -54,6 +57,7 @@ pub struct Block(pub Vec<AstNode>);
 /*
 Statement
 : let Identifier = Expression ;
+: const Identifier = Expression ;
 : set Lvalue = Expression ;
 : Identifier := Expression ;
 : Lvalue = Expression ;
@@ -62,7 +66,7 @@ Statement
 */
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Declaration(Identifier, Expression),
+    Declaration(Identifier, Expression, bool),
     Assignment(Lvalue, Expression),
     Expression(Expression),
 }
@@ -190,8 +194,13 @@ impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let w = if let Some(n) = f.width() { n } else { 0 };
         match self {
-            Self::Declaration(i, e) => {
-                writeln!(f, "{:w$}Assignment:", "")?;
+            Self::Declaration(i, e, false) => {
+                writeln!(f, "{:w$}Declaration:", "")?;
+                write!(f, "{:width$}", i, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
+            }
+            Self::Declaration(i, e, true) => {
+                writeln!(f, "{:w$}Const Declaration:", "")?;
                 write!(f, "{:width$}", i, width = w + INDENT_INCREASE)?;
                 write!(f, "{:width$}", e, width = w + INDENT_INCREASE)?;
             }
@@ -346,8 +355,9 @@ impl Display for Construct {
                 Self::AstNode => "Ast Node",
                 Self::Block => "Block",
                 Self::Statement => "Statement",
-                Self::Let => "Let",
-                Self::Set => "Set",
+                Self::Let => "Let Declaration",
+                Self::Var => "Var Declaration",
+                Self::Set => "Set Statement",
                 Self::Expression => "Expression",
                 Self::Term => "Term",
                 Self::Factor => "Factor",
@@ -359,6 +369,8 @@ impl Display for Construct {
                 Self::If => "If Expression",
                 Self::While => "While Expression",
                 Self::Lambda => "Lambda Expression",
+                Self::SimpleAssignment => "Assignment",
+                Self::SimpleDeclaration => "Declaration",
             }
         )
     }

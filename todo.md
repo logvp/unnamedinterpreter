@@ -14,6 +14,7 @@
 ## Features
 
 - [x] Multiline REPL statements
+- [x] Immutable variables
 - [ ] Everything expression bases
   - [x] `if` expressions
   - [x] `while` expressions
@@ -21,7 +22,6 @@
   - [x] Allow expressions in `AstNode`s
 - [ ] Arrays
 - [ ] User defined types
-- [ ] Immutable variables
 - [ ] Early return
 - [ ] Comments
 - [ ] Negation operator
@@ -35,7 +35,6 @@
   - [x] Enumerated error types
   - [ ] Location + snippet
 - [ ] Rework `Context` + scope
-  - [ ] ~~More "proper" return values(?)~~
   - How would you look up anonymous Lvalue eg array index
 - [ ] Handle escape sequences in strings
 - [x] No longer evaluate statements to values

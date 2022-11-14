@@ -1,5 +1,5 @@
 let count = 100;
-let i = 1;
+var i = 1;
 
 let divisible = lambda (a, b) {
     (a / b) * b == a

@@ -66,7 +66,8 @@ pub enum SyntaxError {
 pub enum RuntimeError {
     ExpectedButFound(RuntimeType, RuntimeType),
     ExpectedArgumentsFound(usize, usize),
-    VariableAlreadyDeclared(String),
+    VariableRedeclaration(String),
+    ConstReassignment(String),
     UnknownIdentifier(String),
 }
 
@@ -125,10 +126,16 @@ impl Display for RuntimeError {
             Self::UnknownIdentifier(name) => {
                 write!(f, "Identifier `{name}` has not been defined in this scope")
             }
-            Self::VariableAlreadyDeclared(name) => {
+            Self::VariableRedeclaration(name) => {
                 write!(
                     f,
                     "Identifier `{name}` has already been declared in current scope"
+                )
+            }
+            Self::ConstReassignment(name) => {
+                write!(
+                    f,
+                    "Identifier `{name}` was declared immutable and thus cannot be reassigned",
                 )
             }
         }

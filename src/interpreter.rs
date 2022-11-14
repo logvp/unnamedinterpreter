@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
@@ -46,7 +46,7 @@ impl Display for RuntimeValue {
         match self {
             Self::Function { .. } => write!(f, "FunctionObject"),
             Self::Integer(int) => write!(f, "{}", int),
-            Self::String(string) => write!(f, "{}", string),
+            Self::String(string) => write!(f, "{:?}", string),
             Self::Boolean(boolean) => write!(f, "{}", boolean),
             Self::None => write!(f, "NoneType"),
         }
@@ -166,11 +166,11 @@ impl Interpreter {
             context: Rc::new(Context::init_global()),
         }
     }
-    fn interpret_node(&mut self, node: &AstNode) -> InterpreterReturn {
+    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
         node.eval(self.context.clone())
     }
-    pub fn interpret(&mut self, text: String) -> Vec<InterpreterReturn> {
-        let mut ret: Vec<InterpreterReturn> = Default::default();
+    pub fn interpret(&mut self, text: String) -> Vec<Result<RuntimeValue, Error>> {
+        let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
         let mut parser = Parser::new(text);
         let gen = parser.gen_ast();
         match gen {
@@ -185,11 +185,15 @@ impl Interpreter {
     }
 }
 
-type InterpreterReturn = Result<RuntimeValue, Error>;
+#[derive(Clone, Debug)]
+struct Variable {
+    val: RuntimeValue,
+    is_const: bool,
+}
 
 #[derive(Clone)]
 struct Context {
-    data: RefCell<HashMap<String, RuntimeValue>>,
+    data: RefCell<HashMap<String, Variable>>,
     parent: Option<Rc<Self>>,
 }
 impl Context {
@@ -198,26 +202,39 @@ impl Context {
             data: Default::default(),
             parent: None,
         };
-        global.insert(
+        global.declare(
             "print".to_string(),
             RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::Print,
             }))),
+            true,
         );
-        global.insert(
+        global.declare(
             "typeof".to_string(),
             RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::TypeOf,
             }))),
+            true,
         );
-        global.insert(
+        global.declare(
             "debug".to_string(),
             RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
                 kind: IntrinsicFunction::Debug,
             }))),
+            true,
         );
 
         global
+    }
+
+    fn is_const(&self, key: &String) -> Option<bool> {
+        if self.data.borrow().contains_key(key) {
+            Some(self.data.borrow().get(key).unwrap().is_const)
+        } else if let Some(parent) = &self.parent {
+            parent.is_const(key)
+        } else {
+            None
+        }
     }
 
     fn contains(&self, key: &String) -> bool {
@@ -234,21 +251,36 @@ impl Context {
         self.data.borrow().contains_key(key)
     }
 
-    fn insert(&self, key: String, val: RuntimeValue) -> Option<RuntimeValue> {
-        self.data.borrow_mut().insert(key, val)
+    fn declare(&self, key: String, val: RuntimeValue, is_const: bool) {
+        self.data
+            .borrow_mut()
+            .insert(key, Variable { val, is_const })
+            .ok_or(())
+            .expect_err("Cannot redeclare variable in same scope");
     }
 
-    fn update(&self, key: String, val: RuntimeValue) -> Option<RuntimeValue> {
+    fn update(&self, key: String, val: RuntimeValue) -> Result<(), RuntimeError> {
         if self.contains_in_scope(&key) {
-            self.insert(key, val)
+            if self.is_const(&key).unwrap() {
+                Err(RuntimeError::ConstReassignment(key))
+            } else {
+                self.data.borrow_mut().insert(
+                    key,
+                    Variable {
+                        val,
+                        is_const: false,
+                    },
+                );
+                Ok(())
+            }
         } else if let Some(parent) = &self.parent {
             parent.update(key, val)
         } else {
-            None
+            Err(RuntimeError::UnknownIdentifier(key))
         }
     }
 
-    fn get(&self, key: &String) -> Option<RuntimeValue> {
+    fn get(&self, key: &String) -> Option<Variable> {
         self.data.borrow().get(key).cloned().or_else(|| {
             if let Some(parent) = &self.parent {
                 parent.get(key)
@@ -278,11 +310,11 @@ impl Debug for Context {
 }
 
 trait Eval {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn;
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error>;
 }
 
 impl Eval for AstNode {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Statement(statement) => statement.eval(ctx),
             Self::Expression(expr) => expr.eval(ctx),
@@ -291,21 +323,20 @@ impl Eval for AstNode {
 }
 
 impl Eval for Statement {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
-            Self::Declaration(lhs, rhs) => {
+            Self::Declaration(lhs, rhs, is_const) => {
                 if !ctx.contains_in_scope(&lhs.name) {
                     let value = rhs.eval(ctx.clone())?;
-                    ctx.insert(lhs.name.clone(), value);
+                    ctx.declare(lhs.name.clone(), value, *is_const);
                 } else {
-                    Err(RuntimeError::VariableAlreadyDeclared(lhs.name.clone()))?
+                    Err(RuntimeError::VariableRedeclaration(lhs.name.clone()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
                 if ctx.contains(lhs.name().unwrap()) {
                     let value = rhs.eval(ctx.clone())?;
-                    ctx.update(lhs.name().unwrap().clone(), value)
-                        .expect("could not update value");
+                    ctx.update(lhs.name().unwrap().clone(), value)?;
                 } else {
                     Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()))?
                 }
@@ -319,7 +350,7 @@ impl Eval for Statement {
 }
 
 impl Eval for Expression {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         Ok(match self {
             Self::Add(lhs, rhs) => {
                 RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx)?.int()?)
@@ -357,7 +388,7 @@ impl Eval for Expression {
 }
 
 impl Eval for Term {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Multiply(lhs, rhs) => Ok(RuntimeValue::Integer(
                 lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx)?.int()?,
@@ -376,7 +407,7 @@ impl Eval for Term {
 }
 
 impl Eval for Factor {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Literal(lit) => lit.eval(ctx),
             Self::Expression(expr) => expr.eval(ctx),
@@ -405,8 +436,9 @@ impl Eval for Factor {
                                     args.len(),
                                 ))?
                             }
+                            // Bind arguments to parameter names
                             for (ident, val) in parameters.iter().zip(args.iter()) {
-                                scope.insert(ident.name.to_owned(), val.eval(ctx.clone())?);
+                                scope.declare(ident.name.to_owned(), val.eval(ctx.clone())?, false);
                             }
 
                             body.eval(Rc::new(scope))
@@ -448,7 +480,7 @@ impl Eval for Factor {
 }
 
 impl Eval for Block {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         let Self(vec) = self;
         let mut ret = RuntimeValue::None;
         for node in vec {
@@ -459,7 +491,7 @@ impl Eval for Block {
 }
 
 impl Eval for Literal {
-    fn eval(&self, _: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, _: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Integer(int) => Ok(RuntimeValue::Integer(*int)),
             Self::String(string) => Ok(RuntimeValue::String(string.to_owned())),
@@ -469,9 +501,9 @@ impl Eval for Literal {
 }
 
 impl Eval for Identifier {
-    fn eval(&self, ctx: Rc<Context>) -> InterpreterReturn {
+    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match ctx.get(&self.name) {
-            Some(val) => Ok(val),
+            Some(Variable { val, .. }) => Ok(val),
             None => Err(RuntimeError::UnknownIdentifier(self.name.to_owned()).into()),
         }
     }

@@ -26,7 +26,7 @@ mod tests {
     use crate::parser::Parser;
 
     const PROGRAM: &str = r#"
-    let x = 15;
+    var x = 15;
     set x = lambda () { 
         return := lambda (z) { 
             if (z > 0) { 

@@ -37,27 +37,47 @@ impl Parser {
 
     fn parse_ast_node(&mut self) -> Result<ast::AstNode, Error> {
         if let Some(statement) = match self.token()? {
-            Token::Let => {
+            Token::Var => {
                 self.consume();
-                let identifier = self.parse_identifier()?;
+                let identifier = self.parse_identifier(ast::Construct::Var)?;
                 if let Token::Equal = self.token()? {
                     self.consume();
                     Some(ast::Statement::Declaration(
                         identifier,
                         self.parse_expression()?,
+                        false,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
                         self.token()?,
-                        ast::Construct::Let,
+                        ast::Construct::Var,
+                    )
+                    .into());
+                }
+            }
+            Token::Let => {
+                self.consume();
+                let identifier = self.parse_identifier(ast::Construct::Let)?;
+                if let Token::Equal = self.token()? {
+                    self.consume();
+                    Some(ast::Statement::Declaration(
+                        identifier,
+                        self.parse_expression()?,
+                        true,
+                    ))
+                } else {
+                    return Err(SyntaxError::ExpectedTokenIn(
+                        Token::Equal,
+                        self.token()?,
+                        ast::Construct::Var,
                     )
                     .into());
                 }
             }
             Token::Set => {
                 self.consume();
-                let lvalue = self.parse_lvalue()?;
+                let lvalue = self.parse_lvalue(ast::Construct::Set)?;
                 if let Token::Equal = self.token()? {
                     self.consume();
                     Some(ast::Statement::Assignment(lvalue, self.parse_expression()?))
@@ -71,18 +91,19 @@ impl Parser {
                 }
             }
             Token::Identifier(_) if self.peek()?.kind_eq(&Token::ColonEqual) => {
-                let identifier = self.parse_identifier()?;
+                let identifier = self.parse_identifier(ast::Construct::SimpleDeclaration)?;
                 // consume `:=`
                 self.token()?;
                 self.consume();
                 Some(ast::Statement::Declaration(
                     identifier,
                     self.parse_expression()?,
+                    false,
                 ))
             }
             // TODO: Only checks for identifier not for Lvalue
             Token::Identifier(_) if self.peek()?.kind_eq(&Token::Equal) => {
-                let lvalue = self.parse_lvalue()?;
+                let lvalue = self.parse_lvalue(ast::Construct::SimpleAssignment)?;
                 // consume `=`
                 self.token()?;
                 self.consume();
@@ -329,7 +350,7 @@ impl Parser {
             .into());
         }
         while !self.token()?.kind_eq(&Token::RightParen) {
-            params.push(self.parse_identifier()?);
+            params.push(self.parse_identifier(ast::Construct::ParameterList)?);
             if let Token::Comma = self.token()? {
                 self.consume();
                 continue;
@@ -389,16 +410,19 @@ impl Parser {
         }
     }
 
-    fn parse_lvalue(&mut self) -> Result<ast::Lvalue, Error> {
-        Ok(ast::Lvalue::Identifier(self.parse_identifier()?))
+    fn parse_lvalue(&mut self, ort: ast::Construct) -> Result<ast::Lvalue, Error> {
+        Ok(ast::Lvalue::Identifier(self.parse_identifier(ort)?))
     }
 
-    fn parse_identifier(&mut self) -> Result<ast::Identifier, Error> {
+    fn parse_identifier(&mut self, ort: ast::Construct) -> Result<ast::Identifier, Error> {
         if let Token::Identifier(name) = self.token()? {
             self.consume();
             Ok(ast::Identifier { name })
         } else {
-            Err(SyntaxError::ExpectedToken(Token::Identifier(String::new()), self.token()?).into())
+            Err(
+                SyntaxError::ExpectedTokenIn(Token::Identifier(String::new()), self.token()?, ort)
+                    .into(),
+            )
         }
     }
 

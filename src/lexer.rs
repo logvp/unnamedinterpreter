@@ -27,6 +27,7 @@ pub enum Token {
     ColonEqual,
     Equal,
     Semicolon,
+    Var,
     Let,
     Set,
     Lambda,
@@ -72,6 +73,7 @@ impl Display for Token {
                 Self::Equal => "`=`",
                 Self::Semicolon => "`;`",
                 Self::Let => "`let`",
+                Self::Var => "`var`",
                 Self::Set => "`set`",
                 Self::Lambda => "`lambda`",
                 Self::While => "`while`",
@@ -184,6 +186,7 @@ impl Lexer {
         })).
         // keywords
         or_else(|| match_token_pattern(r"^let\b", |_| Token::Let)).
+        or_else(|| match_token_pattern(r"^var\b", |_| Token::Var)).
         or_else(|| match_token_pattern(r"^set\b", |_| Token::Set)).
         or_else(|| match_token_pattern(r"^while\b", |_| Token::While)).
         or_else(|| match_token_pattern(r"^if\b", |_| Token::If)).
