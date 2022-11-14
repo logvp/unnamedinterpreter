@@ -46,7 +46,7 @@ impl Display for RuntimeValue {
         match self {
             Self::Function { .. } => write!(f, "FunctionObject"),
             Self::Integer(int) => write!(f, "{}", int),
-            Self::String(string) => write!(f, "{:?}", string),
+            Self::String(string) => write!(f, "{}", string),
             Self::Boolean(boolean) => write!(f, "{}", boolean),
             Self::None => write!(f, "NoneType"),
         }
