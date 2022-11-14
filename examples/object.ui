@@ -1,0 +1,32 @@
+" There aren't comments so string statements work lol ";
+" person object constructor ";
+let constructor = lambda (name, age) {
+    "method to execute";
+    lambda (method) {
+        if (method == "get") {
+            lambda (field) {
+                if (field == "name") {
+                    name
+                } else if (field == "age") {
+                    age
+                } else {}
+            }
+        } else if (method == "set") {
+            lambda (field) {
+                if (field == "name") {
+                    lambda (new_name) { name = new_name; }
+                } else if (field == "age") {
+                    lambda (new_age) { age = new_age; }
+                } else {}
+            }
+        } else if (method == "greet") {
+            lambda () { print("Hello! My name is", name, "and I am", age, "years old!"); }
+        }
+    }
+};
+
+let john = constructor("John", 30);
+john("greet")();
+john("set")("age")(31);
+john("greet")();
+print("Happy birthday", john("get")("name"), "!");
