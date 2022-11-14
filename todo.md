@@ -26,6 +26,8 @@
 - [ ] Comments
 - [ ] Negation operator
 - [ ] Question "not null" operator
+- [ ] Named arguments
+- [ ] Default arguments
 
 ## Improvements
 
