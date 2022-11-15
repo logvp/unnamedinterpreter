@@ -132,6 +132,7 @@ pub enum Factor {
     Variable(Identifier),
     Lambda(Vec<Identifier>, Block),
     FunctionCall(Box<Factor>, Vec<Expression>),
+    Block(Block),
 }
 
 #[derive(Debug, Clone)]
@@ -298,6 +299,9 @@ impl Display for Factor {
             }
             Self::Variable(i) => {
                 write!(f, "{:w$}", i)?;
+            }
+            Self::Block(b) => {
+                write!(f, "{:w$}", b)?;
             }
             Self::Lambda(args, body) => {
                 writeln!(f, "{:w$}Lambda:", "")?;

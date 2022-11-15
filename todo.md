@@ -15,10 +15,10 @@
 
 - [x] Multiline REPL statements
 - [x] Immutable variables
-- [ ] Everything expression bases
+- [x] Everything expression bases
   - [x] `if` expressions
   - [x] `while` expressions
-  - [ ] Blocks as expressions
+  - [x] Blocks as expressions
   - [x] Allow expressions in `AstNode`s
 - [ ] Arrays
 - [ ] User defined types
@@ -28,6 +28,8 @@
 - [ ] Question "not null" operator
 - [ ] Named arguments
 - [ ] Default arguments
+- [ ] File import
+- [ ] I/O
 
 ## Improvements
 
@@ -41,6 +43,8 @@
 - [ ] Handle escape sequences in strings
 - [x] No longer evaluate statements to values
 - [ ] Get rid of REPL macros or make them better
+- [ ] Write REPL language help page (.HELP)
+- [ ] Create README file + documentation
 
 ## Bugs
 

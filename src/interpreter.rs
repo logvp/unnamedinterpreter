@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
@@ -413,6 +413,7 @@ impl Eval for Factor {
             Self::Expression(expr) => expr.eval(ctx),
             Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx)?.int()?)),
             Self::Variable(identifier) => identifier.eval(ctx),
+            Self::Block(block) => block.eval(ctx),
             Self::Lambda(param, body) => Ok(RuntimeValue::Function(Rc::new(Function(
                 FunctionType::Lambda {
                     parent_scope: ctx,

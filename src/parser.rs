@@ -227,6 +227,7 @@ impl Parser {
             Token::LeftParen => ast::Factor::Expression(Box::new(
                 self.parse_parenthetical_expression(ast::Construct::Expression)?,
             )),
+            Token::LeftBrace => ast::Factor::Block(self.parse_block()?),
             Token::Minus => {
                 self.consume();
                 ast::Factor::Negate(Box::new(self.parse_factor()?))
@@ -317,7 +318,6 @@ impl Parser {
         }
         let cond = self.parse_parenthetical_expression(ast::Construct::If)?;
         let body = self.parse_block()?;
-        // TODO: else if
         let else_ = match self.token()? {
             // else if
             Token::Else if self.peek()?.kind_eq(&Token::If) => {
