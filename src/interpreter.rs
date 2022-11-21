@@ -481,7 +481,8 @@ impl Eval for Factor {
 }
 
 impl Eval for Block {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
+    fn eval(&self, parent: Rc<Context>) -> Result<RuntimeValue, Error> {
+        let ctx = Rc::new(Context::new(parent));
         let Self(vec) = self;
         let mut ret = RuntimeValue::None;
         for node in vec {
