@@ -39,7 +39,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         fn repl_help<O: Write>(output: &mut O) -> io::Result<()> {
             writeln!(
                 output,
-"REPL: REPL help; For language help type `.HELP`
+"REPL: REPL help; For language help type `:HELP`
     REPL Commands:
         HELP - Displays language help
         REPL - Displays this help message
@@ -54,33 +54,36 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         fn help<O: Write>(output: &mut O) -> io::Result<()> {
             writeln!(
                 output,
-                "REPL: Language help; For REPL help type `.REPL`
+                "REPL: Language help; For REPL help type `:REPL`
     unnamedinterpreter
         TODO: help page"
             )?;
             Ok(())
         }
 
-        // writeln!(self.output, "HELLO THIS IS THE REPL SPEAKING")?;
-        let mut words = line.split_whitespace();
-        match words.next().unwrap() {
-            ".QUIT" => return Ok(false),
-            ".HELP" => help(&mut self.output)?,
-            ".REPL" => repl_help(&mut self.output)?,
-            ".BEGIN" => self.start_recording(words.next().unwrap().to_string()),
-            ".END" => self.stop_recording(),
-            ".PRINT" => writeln!(
+        let mut words = {
+            let mut chars = line.chars();
+            chars.next();
+            chars.as_str()
+        }
+        .split_whitespace();
+        match words.next() {
+            Some("QUIT") => return Ok(false),
+            Some("HELP") => help(&mut self.output)?,
+            Some("REPL") => repl_help(&mut self.output)?,
+            Some("BEGIN") => self.start_recording(words.next().unwrap().to_string()),
+            Some("END") => self.stop_recording(),
+            Some("PRINT") => writeln!(
                 self.output,
                 "REPL: \n> {:?}",
                 self.macros.get(words.next().unwrap())
             )?,
-            ".PLAY" => self.play_macro(words.next().unwrap().to_string())?,
-            ".{" => self.start_buffering(),
-            ".}" => self.send_buffer()?,
-            "." => writeln!(self.output, "REPL: Type `.HELP` for help")?,
+            Some("PLAY") => self.play_macro(words.next().unwrap().to_string())?,
+            Some("{") => self.start_buffering(),
+            Some("}") => self.send_buffer()?,
             _ => writeln!(
                 self.output,
-                "REPL: Unknown command.\nREPL: Type `.HELP` or `.REPL` for help"
+                "REPL: Unknown command.\nREPL: Type `:HELP` or `:REPL` for help"
             )?,
         }
         Ok(true)
@@ -110,7 +113,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     }
     fn send_buffer(&mut self) -> io::Result<()> {
         if !self.multiline {
-            writeln!(self.output, "REPL: `.{{` must come before `.}}`")?;
+            writeln!(self.output, "REPL: `:{{` must come before `:}}`")?;
             return Ok(());
         }
         let result = self.interpreter.interpret(self.multiline_buffer.clone());
@@ -128,7 +131,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         }
         self.output.flush()?;
         self.input.read_line(&mut buffer)?;
-        if buffer.starts_with('.') {
+        if buffer.starts_with(':') {
             return self.repl_command(&buffer);
         } else if self.multiline {
             self.multiline_buffer += &buffer;
