@@ -10,6 +10,7 @@ use crate::parser::Parser;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
+    Object(Rc<Context>),
     Function(Rc<Function>),
     Integer(i32),
     String(String),
@@ -19,6 +20,7 @@ pub enum RuntimeValue {
 
 #[derive(Debug)]
 pub enum RuntimeType {
+    Object,
     Function,
     Integer,
     String,
@@ -31,6 +33,7 @@ impl Display for RuntimeType {
             f,
             "{}",
             match self {
+                Self::Object => "Object",
                 Self::Function => "Function",
                 Self::Integer => "Integer",
                 Self::String => "String",
@@ -44,6 +47,7 @@ impl Display for RuntimeType {
 impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Object(ctx) => write!(f, "{:?}", ctx),
             Self::Function { .. } => write!(f, "FunctionObject"),
             Self::Integer(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),
@@ -72,6 +76,13 @@ impl PartialEq for RuntimeValue {
             Self::Boolean(a) => {
                 if let Self::Boolean(b) = other {
                     *a == *b
+                } else {
+                    false
+                }
+            }
+            Self::Object(a) => {
+                if let Self::Object(b) = other {
+                    a == b
                 } else {
                     false
                 }
@@ -126,6 +137,7 @@ impl RuntimeValue {
 
     fn get_type(&self) -> RuntimeType {
         match self {
+            Self::Object(_) => RuntimeType::Object,
             Self::Function { .. } => RuntimeType::Function,
             Self::Integer(_) => RuntimeType::Integer,
             Self::String(_) => RuntimeType::String,
@@ -135,6 +147,7 @@ impl RuntimeValue {
     }
 }
 
+// Wrapper to allow Function to be exposed in RuntimeValue but FunctionType implementation to remain private
 #[derive(Debug)]
 pub struct Function(FunctionType);
 
@@ -185,7 +198,7 @@ impl Interpreter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct Variable {
     val: RuntimeValue,
     is_const: bool,
@@ -297,6 +310,17 @@ impl Context {
         }
     }
 }
+impl PartialEq for Context {
+    fn eq(&self, other: &Self) -> bool {
+        *self.data.borrow() == *other.data.borrow() && {
+            match (&self.parent, &other.parent) {
+                (Some(a), Some(b)) => Rc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+    }
+}
 
 impl Debug for Context {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -381,6 +405,22 @@ impl Eval for Expression {
                     ret = body.eval(ctx.clone())?;
                 }
                 ret
+            }
+            Self::With(with, body) => {
+                let arg = with.eval(ctx)?;
+                if let RuntimeValue::Object(obj_ctx) = arg {
+                    body.eval_with_context(&obj_ctx)?
+                } else {
+                    Err(RuntimeError::ExpectedButFound(
+                        RuntimeType::Object,
+                        arg.get_type(),
+                    ))?
+                }
+            }
+            Self::New(block) => {
+                let ctx = Rc::new(Context::new(ctx));
+                block.eval_with_context(&ctx)?;
+                RuntimeValue::Object(ctx)
             }
             Self::Term(term) => term.eval(ctx)?,
         })
@@ -483,6 +523,11 @@ impl Eval for Factor {
 impl Eval for Block {
     fn eval(&self, parent: Rc<Context>) -> Result<RuntimeValue, Error> {
         let ctx = Rc::new(Context::new(parent));
+        self.eval_with_context(&ctx)
+    }
+}
+impl Block {
+    fn eval_with_context(&self, ctx: &Rc<Context>) -> Result<RuntimeValue, Error> {
         let Self(vec) = self;
         let mut ret = RuntimeValue::None;
         for node in vec {

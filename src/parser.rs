@@ -134,8 +134,19 @@ impl Parser {
             Token::While => {
                 self.consume();
                 let cond = self.parse_parenthetical_expression(ast::Construct::While)?;
-                let body = self.parse_block()?;
+                let body = self.parse_braced_block()?;
                 ast::Expression::While(Box::new(cond), body)
+            }
+            Token::With => {
+                self.consume();
+                let object = self.parse_parenthetical_expression(ast::Construct::With)?;
+                let body = self.parse_braced_block()?;
+                ast::Expression::With(Box::new(object), body)
+            }
+            Token::New => {
+                self.consume();
+                let body = self.parse_braced_block()?;
+                ast::Expression::New(body)
             }
             _ => {
                 let lhs: ast::Term = self.parse_term()?;
@@ -227,7 +238,7 @@ impl Parser {
             Token::LeftParen => ast::Factor::Expression(Box::new(
                 self.parse_parenthetical_expression(ast::Construct::Expression)?,
             )),
-            Token::LeftBrace => ast::Factor::Block(self.parse_block()?),
+            Token::LeftBrace => ast::Factor::Block(self.parse_braced_block()?),
             Token::Minus => {
                 self.consume();
                 ast::Factor::Negate(Box::new(self.parse_factor()?))
@@ -275,7 +286,7 @@ impl Parser {
         }
     }
 
-    fn parse_block(&mut self) -> Result<ast::Block, Error> {
+    fn parse_braced_block(&mut self) -> Result<ast::Block, Error> {
         if let Token::LeftBrace = self.token()? {
             self.consume();
         } else {
@@ -317,7 +328,7 @@ impl Parser {
             unreachable!()
         }
         let cond = self.parse_parenthetical_expression(ast::Construct::If)?;
-        let body = self.parse_block()?;
+        let body = self.parse_braced_block()?;
         let else_ = match self.token()? {
             // else if
             Token::Else if self.peek()?.kind_eq(&Token::If) => {
@@ -326,7 +337,7 @@ impl Parser {
             }
             Token::Else => {
                 self.consume();
-                self.parse_block()?
+                self.parse_braced_block()?
             }
             _ => Default::default(),
         };
@@ -365,7 +376,7 @@ impl Parser {
         }
         self.consume(); // consume `)`
 
-        let block = self.parse_block()?;
+        let block = self.parse_braced_block()?;
 
         Ok(ast::Factor::Lambda(params, block))
     }

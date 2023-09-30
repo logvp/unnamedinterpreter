@@ -23,6 +23,7 @@ pub enum Token {
     Minus,
     Star,
     Slash,
+    Dot,
     Comma,
     ColonEqual,
     Equal,
@@ -30,6 +31,8 @@ pub enum Token {
     Var,
     Let,
     Set,
+    With,
+    New,
     Lambda,
     While,
     If,
@@ -68,6 +71,7 @@ impl Display for Token {
                 Self::Minus => "`-`",
                 Self::Star => "`*`",
                 Self::Slash => "`/`",
+                Self::Dot => "`.`",
                 Self::Comma => "`,`",
                 Self::ColonEqual => "`:=`",
                 Self::Equal => "`=`",
@@ -75,6 +79,8 @@ impl Display for Token {
                 Self::Let => "`let`",
                 Self::Var => "`var`",
                 Self::Set => "`set`",
+                Self::With => "`with`",
+                Self::New => "`new`",
                 Self::Lambda => "`lambda`",
                 Self::While => "`while`",
                 Self::If => "`if`",
@@ -188,6 +194,8 @@ impl Lexer {
         or_else(|| match_token_pattern(r"^let\b", |_| Token::Let)).
         or_else(|| match_token_pattern(r"^var\b", |_| Token::Var)).
         or_else(|| match_token_pattern(r"^set\b", |_| Token::Set)).
+        or_else(|| match_token_pattern(r"^new\b", |_| Token::New)).
+        or_else(|| match_token_pattern(r"^with\b", |_| Token::With)).
         or_else(|| match_token_pattern(r"^while\b", |_| Token::While)).
         or_else(|| match_token_pattern(r"^if\b", |_| Token::If)).
         or_else(|| match_token_pattern(r"^else\b", |_| Token::Else)).
@@ -220,6 +228,7 @@ impl Lexer {
                 // (r"^\\", Token::Backslash),
                 (r"^~", Token::Tilde),
                 (r"^\?", Token::Question),
+                (r"^\.", Token::Dot),
                 (r"^,", Token::Comma),
                 (r"^;", Token::Semicolon),
                 (r"^=", Token::Equal),

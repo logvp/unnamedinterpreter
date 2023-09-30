@@ -22,6 +22,7 @@ pub enum Construct {
     ParameterList,
     If,
     While,
+    With,
     Lambda,
     SimpleAssignment,
     SimpleDeclaration,
@@ -48,7 +49,6 @@ impl DerefMut for Ast {
 pub enum AstNode {
     Expression(Expression),
     Statement(Statement),
-    // Block(Block),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -86,6 +86,8 @@ pub enum Expression {
     Compare(Term, Box<Expression>, Comparison),
     IfElse(Box<Expression>, Block, Block),
     While(Box<Expression>, Block),
+    With(Box<Expression>, Block),
+    New(Block),
     Term(Term),
 }
 #[derive(Debug, Clone)]
@@ -177,7 +179,6 @@ impl Display for AstNode {
         match self {
             Self::Expression(e) => write!(f, "{:width$}", e, width = w + INDENT_INCREASE),
             Self::Statement(s) => write!(f, "{:width$}", s, width = w + INDENT_INCREASE),
-            // Self::Block(b) => write!(f, "{:width$}", b, width = w + INDENT_INCREASE),
         }
     }
 }
@@ -248,6 +249,15 @@ impl Display for Expression {
             Self::While(cond, body) => {
                 writeln!(f, "{:w$}While:", "")?;
                 write!(f, "{:width$}", cond, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+            }
+            Self::With(object, body) => {
+                writeln!(f, "{:w$}With:", "")?;
+                write!(f, "{:width$}", object, width = w + INDENT_INCREASE)?;
+                write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
+            }
+            Self::New(body) => {
+                writeln!(f, "{:w$}New:", "")?;
                 write!(f, "{:width$}", body, width = w + INDENT_INCREASE)?;
             }
         }
@@ -372,6 +382,7 @@ impl Display for Construct {
                 Self::ParameterList => "Parameter List",
                 Self::If => "If Expression",
                 Self::While => "While Expression",
+                Self::With => "With Expression",
                 Self::Lambda => "Lambda Expression",
                 Self::SimpleAssignment => "Assignment",
                 Self::SimpleDeclaration => "Declaration",
