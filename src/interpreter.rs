@@ -184,7 +184,15 @@ impl Interpreter {
     }
     pub fn interpret(&mut self, text: String) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
-        let mut parser = Parser::new(text);
+        let mut parser = {
+            match Parser::new(text) {
+                Ok(parser) => parser,
+                Err(e) => {
+                    ret.push(Err(e));
+                    return ret;
+                }
+            }
+        };
         let gen = parser.gen_ast();
         match gen {
             Ok(ast) => {

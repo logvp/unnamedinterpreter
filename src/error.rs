@@ -48,8 +48,8 @@ impl Display for Error {
 
 #[derive(Debug)]
 pub enum LexerError {
-    // Eof,
     UnknownToken(String, Loc),
+    UnterminatedStringLiteral(String, Loc),
 }
 
 #[derive(Debug)]
@@ -75,6 +75,9 @@ impl Display for LexerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnknownToken(tok, loc) => write!(f, "Unknown token {} at {}", tok, loc),
+            Self::UnterminatedStringLiteral(string, loc) => {
+                write!(f, "Unterminated string literal \"{}\" at {}", string, loc)
+            }
         }
     }
 }

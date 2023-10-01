@@ -7,11 +7,11 @@ pub struct Parser {
     lexer: Lexer,
 }
 impl Parser {
-    pub fn new(text: String) -> Self {
-        Parser {
+    pub fn new(text: String) -> Result<Self, Error> {
+        Ok(Parser {
             token: None,
-            lexer: Lexer::new(text),
-        }
+            lexer: Lexer::lex(text)?,
+        })
     }
 
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
@@ -458,7 +458,7 @@ impl Parser {
         Ok(self.token.clone().unwrap())
     }
 
-    fn peek(&mut self) -> Result<Token, Error> {
+    fn peek(&mut self) -> Result<&Token, Error> {
         self.token()?;
         Ok(self.lexer.peek()?)
     }

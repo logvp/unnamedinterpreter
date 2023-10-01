@@ -1,10 +1,7 @@
-extern crate regex;
-
-use std::fmt::Display;
+use std::{collections::VecDeque, fmt::Display};
 
 pub use crate::ast::Literal;
 use crate::error::{LexerError, Loc};
-use regex::Regex;
 
 #[derive(Debug, Clone)]
 pub enum Token {
@@ -97,186 +94,119 @@ impl Display for Token {
     }
 }
 
-const MAX_SNIPPET_LENGTH: usize = 20;
-
 #[derive(Debug)]
 pub struct Lexer {
-    text: String,
-    cursor: usize,
-    loc: Loc,
+    tokens: VecDeque<Token>,
 }
 impl Lexer {
-    // Lexer owns text
-    pub fn new(text: String) -> Self {
-        Lexer {
-            text,
-            cursor: 0,
-            loc: Default::default(),
+    pub fn lex(text: String) -> Result<Self, LexerError> {
+        let mut chars = text.chars().peekable();
+        let mut tokens = VecDeque::new();
+        let mut buffer = String::new();
+        let mut loc = Loc::default();
+        while let Some(c) = chars.next() {
+            match c {
+                '\n' => {
+                    loc.line += 1;
+                    loc.col = 0;
+                }
+                _ if c.is_whitespace() => {
+                    loc.col += 1;
+                }
+                _ if c.is_digit(10) => {
+                    buffer.clear();
+                    buffer.push(c);
+                    while let Some(digit) = chars.next_if(|d| d.is_digit(10)) {
+                        buffer.push(digit);
+                    }
+                    tokens.push_back(Token::Literal(Literal::Integer(buffer.parse().unwrap())))
+                }
+                '"' => {
+                    buffer.clear();
+                    while let Some(c) = chars.next_if(|&c| c != '"') {
+                        // escape sequences
+                        buffer.push(c);
+                    }
+                    if let Some('"') = chars.next() {
+                        tokens.push_back(Token::Literal(Literal::String(buffer.clone())))
+                    } else {
+                        return Err(LexerError::UnterminatedStringLiteral(buffer, loc));
+                    }
+                }
+                '<' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::LessEqual),
+                '>' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::GreaterEqual),
+                '+' if chars.next_if_eq(&'+').is_some() => tokens.push_back(Token::PlusPlus),
+                ':' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::ColonEqual),
+                '=' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::EqualEqual),
+                '/' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::SlashEqual),
+
+                '<' => tokens.push_back(Token::LeftAngle),
+                '>' => tokens.push_back(Token::RightAngle),
+                '(' => tokens.push_back(Token::LeftParen),
+                ')' => tokens.push_back(Token::RightParen),
+                '[' => tokens.push_back(Token::LeftBracket),
+                ']' => tokens.push_back(Token::RightBracket),
+                '{' => tokens.push_back(Token::LeftBrace),
+                '}' => tokens.push_back(Token::RightBrace),
+                '=' => tokens.push_back(Token::Equal),
+                '+' => tokens.push_back(Token::Plus),
+                '-' => tokens.push_back(Token::Minus),
+                '.' => tokens.push_back(Token::Dot),
+                ',' => tokens.push_back(Token::Comma),
+                '*' => tokens.push_back(Token::Star),
+                '/' => tokens.push_back(Token::Slash),
+                ';' => tokens.push_back(Token::Semicolon),
+                '~' => tokens.push_back(Token::Tilde),
+                '?' => tokens.push_back(Token::Question),
+
+                '_' | 'a'..='z' | 'A'..='Z' => {
+                    buffer.clear();
+                    buffer.push(c);
+                    while let Some(c) =
+                        chars.next_if(|c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'))
+                    {
+                        buffer.push(c);
+                    }
+                    let tok = match buffer.as_str() {
+                        "true" => Token::Literal(Literal::Boolean(true)),
+                        "false" => Token::Literal(Literal::Boolean(false)),
+                        "var" => Token::Var,
+                        "let" => Token::Let,
+                        "set" => Token::Set,
+                        "with" => Token::With,
+                        "new" => Token::New,
+                        "lambda" => Token::Lambda,
+                        "while" => Token::While,
+                        "if" => Token::If,
+                        "else" => Token::Else,
+                        _ => Token::Identifier(buffer.clone()),
+                    };
+                    tokens.push_back(tok)
+                }
+                _ => {
+                    buffer.clear();
+                    buffer.push(c);
+                    while let Some(c) = chars.next_if(|c| !c.is_whitespace()) {
+                        buffer.push(c);
+                    }
+                    return Err(LexerError::UnknownToken(buffer, loc));
+                }
+            }
         }
-    }
-
-    pub fn loc(&self) -> Loc {
-        self.loc
-    }
-
-    pub fn has_next(&self) -> bool {
-        self.cursor < self.text.trim_end().len()
-    }
-
-    fn move_cursor(&mut self, update: usize) {
-        self.cursor += update;
-        self.loc.col += update; // TODO: Doesn't handle newlines
+        Ok(Lexer { tokens })
     }
 
     pub fn next_token(&mut self) -> Result<Token, LexerError> {
-        if !self.has_next() {
-            return Ok(Token::Eof);
+        match self.tokens.pop_front() {
+            Some(tok) => Ok(tok),
+            None => Ok(Token::Eof),
         }
-        // text = string[cursor:]
-        let text: String = self.text.split_at(self.cursor).1.to_owned();
-        if text.is_empty() {
-            return Ok(Token::Eof);
-        }
-        let mut match_token_pattern = |pattern, fun: fn(&str) -> Token| {
-            if let Some(mat) = find(pattern, &text) {
-                // self.loc.line += 1; // TODO: this is not right lol
-                let delta = mat.end();
-                self.move_cursor(delta);
-                Some(fun(mat.as_str()))
-            } else {
-                None
-            }
-        };
-        fn match_token_simple(
-            pattern: &str,
-            token: Token,
-            text: &str,
-            lex: &mut Lexer,
-        ) -> Option<Token> {
-            if let Some(mat) = find(pattern, text) {
-                // self.loc.line += 1; // TODO: this is not right lol
-                let delta = mat.end();
-                lex.move_cursor(delta);
-                Some(token)
-            } else {
-                None
-            }
-        }
-        // update loc on newline
-        if text.starts_with('\n') {
-            self.loc.line += 1;
-            self.move_cursor(1);
-            return self.next_token();
-        }
-        // skip whitespace
-        if let Some(mat) = find(r"^\s+", &text) {
-            let delta = mat.end();
-            self.move_cursor(delta);
-            return self.next_token();
-        }
-        // grab integers
-        match_token_pattern(r"^\d+", |mat| {
-            let int: i32 = mat.parse().unwrap();
-            Token::Literal(Literal::Integer(int))
-        }).
-        // grab quotes
-        // TODO: Handle escape characters
-        or_else(|| match_token_pattern(r#"^"[^"]*""#, |mat| {
-            Token::Literal(Literal::String(
-                mat.strip_prefix('"')
-                    .unwrap()
-                    .strip_suffix('"')
-                    .unwrap()
-                    .to_owned(),
-            ))
-        })).
-        // keywords
-        or_else(|| match_token_pattern(r"^let\b", |_| Token::Let)).
-        or_else(|| match_token_pattern(r"^var\b", |_| Token::Var)).
-        or_else(|| match_token_pattern(r"^set\b", |_| Token::Set)).
-        or_else(|| match_token_pattern(r"^new\b", |_| Token::New)).
-        or_else(|| match_token_pattern(r"^with\b", |_| Token::With)).
-        or_else(|| match_token_pattern(r"^while\b", |_| Token::While)).
-        or_else(|| match_token_pattern(r"^if\b", |_| Token::If)).
-        or_else(|| match_token_pattern(r"^else\b", |_| Token::Else)).
-        or_else(|| match_token_pattern(r"^lambda\b", |_| Token::Lambda)).
-        or_else(|| match_token_pattern(r"^true\b", |_| Token::Literal(Literal::Boolean(true)))).
-        or_else(|| match_token_pattern(r"^false\b", |_| Token::Literal(Literal::Boolean(false)))).
-        // identifiers
-        or_else(|| match_token_pattern(r"^[a-zA-Z_][a-zA-Z_\d]*", |mat| { Token::Identifier(mat.to_owned()) })).
-        // anything else that couldn't be confused for an identifier
-        or_else(|| {
-            for (pattern, token) in [
-                (r"^==", Token::EqualEqual),
-                (r"^/=", Token::SlashEqual),
-                (r"^>=", Token::GreaterEqual),
-                (r"^<=", Token::LessEqual),
-                (r"^:=", Token::ColonEqual),
-                (r"^\+\+", Token::PlusPlus),
-                (r"^\(", Token::LeftParen),
-                (r"^\)", Token::RightParen),
-                (r"^<", Token::LeftAngle),
-                (r"^>", Token::RightAngle),
-                (r"^\[", Token::LeftBracket),
-                (r"^\]", Token::RightBracket),
-                (r"^\{", Token::LeftBrace),
-                (r"^\}", Token::RightBrace),
-                (r"^\+", Token::Plus),
-                (r"^-", Token::Minus),
-                (r"^\*", Token::Star),
-                (r"^/", Token::Slash),
-                // (r"^\\", Token::Backslash),
-                (r"^~", Token::Tilde),
-                (r"^\?", Token::Question),
-                (r"^\.", Token::Dot),
-                (r"^,", Token::Comma),
-                (r"^;", Token::Semicolon),
-                (r"^=", Token::Equal),
-            ] {
-                let t = match_token_simple(pattern, token, &text, self);
-                if t.is_some() {
-                    return t;
-                }
-            }
-            None
-        }).
-        ok_or_else(|| {
-            LexerError::UnknownToken(
-                if let Some(mat) = find(r"[^\s]+", &text) {
-                    mat.as_str().to_owned()
-                } else {
-                    text.chars().take(MAX_SNIPPET_LENGTH).collect()
-                },
-                self.loc,
-            )
-        })
     }
 
-    pub fn peek_rest(&mut self) -> Result<Vec<Token>, LexerError> {
-        let cursor = self.cursor;
-        let loc = self.loc;
-        let mut tokens: Vec<Token> = Default::default();
-        while self.has_next() {
-            match self.next_token() {
-                Ok(Token::Eof) => break,
-                Ok(token) => tokens.push(token),
-                Err(error) => return Err(error),
-            }
+    pub fn peek(&self) -> Result<&Token, LexerError> {
+        match self.tokens.front() {
+            Some(tok) => Ok(tok),
+            None => Ok(&Token::Eof),
         }
-        self.loc = loc;
-        self.cursor = cursor;
-        Ok(tokens)
     }
-
-    pub fn peek(&mut self) -> Result<Token, LexerError> {
-        let cursor = self.cursor;
-        let tokens = self.next_token();
-        self.cursor = cursor;
-        tokens
-    }
-}
-
-fn find<'a>(pattern: &str, source: &'a str) -> Option<regex::Match<'a>> {
-    let re = Regex::new(pattern).expect("Invalid regular expression");
-    re.find(source)
 }
