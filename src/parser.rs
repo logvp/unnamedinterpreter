@@ -25,7 +25,7 @@ impl Parser {
             }
         }
 
-        self.expect(Token::Eof, |_| {
+        self.expect_f(Token::Eof, |_| {
             SyntaxError::ExpressionMayOnlyComeAtEndIn(ast::Construct::AstNode).into()
         })?;
 
@@ -254,7 +254,7 @@ impl Parser {
                 self.consume();
                 ast::Factor::Variable(ast::Identifier { name })
             }
-            _ => Err(SyntaxError::UnexpectedToken(self.consume()))?,
+            _ => Err(SyntaxError::UnexpectedTokenIn(self.consume(), ort))?,
         };
         if let Token::LeftParen = self.token() {
             self.parse_function_call(factor)
@@ -267,23 +267,17 @@ impl Parser {
         &mut self,
         ort: ast::Construct,
     ) -> Result<ast::Expression, Error> {
-        self.expect(Token::LeftParen, |lparen| {
-            SyntaxError::ExpectedToken(Token::LeftParen, lparen).into()
-        })?;
+        self.expect(Token::LeftParen, ort)?;
 
         let parenthesized = self.parse_expression(ort)?;
 
-        self.expect(Token::RightParen, |rparen| {
-            SyntaxError::ExpectedToken(Token::RightParen, rparen).into()
-        })?;
+        self.expect(Token::RightParen, ort)?;
 
         Ok(parenthesized)
     }
 
     fn parse_braced_block(&mut self) -> Result<ast::Block, Error> {
-        self.expect(Token::LeftBrace, |tok| {
-            SyntaxError::ExpectedTokenIn(Token::LeftBrace, tok, ast::Construct::Block).into()
-        })?;
+        self.expect(Token::LeftBrace, ast::Construct::Block)?;
         let mut block: Vec<ast::AstNode> = Default::default();
         while !matches!(self.token(), Token::RightBrace) {
             let node = self.parse_ast_node()?;
@@ -297,7 +291,7 @@ impl Parser {
                 }
             }
         }
-        self.expect(Token::RightBrace, |_| {
+        self.expect_f(Token::RightBrace, |_| {
             SyntaxError::ExpressionMayOnlyComeAtEndIn(ast::Construct::Block).into()
         })?;
 
@@ -328,32 +322,26 @@ impl Parser {
     }
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
-        const PARAMS: ast::Construct = ast::Construct::ParameterList;
-        self.expect(Token::Lambda, |tok| {
-            SyntaxError::ExpectedToken(Token::Lambda, tok).into()
-        })?;
+        self.expect(Token::Lambda, ast::Construct::Lambda)?;
+        let params = self.parse_lambda_params()?;
+        let body = self.parse_braced_block()?;
+        Ok(ast::Factor::Lambda(params, body))
+    }
 
-        self.expect(Token::LeftParen, |_| {
-            SyntaxError::ExpectedConstructIn(PARAMS, ast::Construct::Lambda).into()
-        })?;
-
+    fn parse_lambda_params(&mut self) -> Result<Vec<ast::Identifier>, Error> {
+        const ORT: ast::Construct = ast::Construct::ParameterList;
+        self.expect(Token::LeftParen, ORT)?;
         let mut params: Vec<ast::Identifier> = Default::default();
-
         if !matches!(self.token(), Token::RightParen) {
-            params.push(self.parse_identifier(PARAMS)?);
+            params.push(self.parse_identifier(ORT)?);
 
             while matches!(self.token(), Token::Comma) {
                 self.consume(); // ,
-                params.push(self.parse_identifier(PARAMS)?);
+                params.push(self.parse_identifier(ORT)?);
             }
         }
-        self.expect(Token::RightParen, |tok| {
-            SyntaxError::ExpectedTokenIn(Token::RightParen, tok, PARAMS).into()
-        })?;
-
-        let body = self.parse_braced_block()?;
-
-        Ok(ast::Factor::Lambda(params, body))
+        self.expect(Token::RightParen, ORT)?;
+        Ok(params)
     }
 
     fn parse_function_call(&mut self, func: ast::Factor) -> Result<ast::Factor, Error> {
@@ -367,11 +355,9 @@ impl Parser {
 
     fn parse_function_args(&mut self) -> Result<Vec<ast::Expression>, Error> {
         const ORT: ast::Construct = ast::Construct::FunctionCall;
-        self.expect(Token::LeftParen, |tok| {
-            SyntaxError::ExpectedTokenIn(Token::LeftParen, tok, ORT).into()
-        })?;
+        self.expect(Token::LeftParen, ORT)?;
         let mut args: Vec<ast::Expression> = Default::default();
-        if !matches!(self.token(), Token::RightParen) {
+        if !matches!(self.token(), Token::RightParen) && !self.eof() {
             args.push(self.parse_expression(ORT)?);
 
             while matches!(self.token(), Token::Comma) {
@@ -379,9 +365,7 @@ impl Parser {
                 args.push(self.parse_expression(ORT)?);
             }
         }
-        self.expect(Token::RightParen, |tok| {
-            SyntaxError::ExpectedTokenIn(Token::RightParen, tok, ORT).into()
-        })?;
+        self.expect(Token::RightParen, ORT)?;
         Ok(args)
     }
 
@@ -399,17 +383,24 @@ impl Parser {
     }
 
     fn expect_semicolon(&mut self) -> Result<Token, Error> {
-        self.expect(Token::Semicolon, |tok| {
-            SyntaxError::ExpectedTokenIn(Token::Semicolon, tok, ast::Construct::Statement).into()
-        })
+        self.expect(Token::Semicolon, ast::Construct::Statement)
     }
 
-    fn expect(&mut self, expected_kind: Token, err: fn(Token) -> Error) -> Result<Token, Error> {
+    fn expect_f(&mut self, expected_kind: Token, err: fn(Token) -> Error) -> Result<Token, Error> {
         let token = self.consume();
         if expected_kind.kind_eq(&token) {
             Ok(token)
         } else {
             Err(err(token))
+        }
+    }
+
+    fn expect(&mut self, expected_kind: Token, ort: ast::Construct) -> Result<Token, Error> {
+        let token = self.consume();
+        if expected_kind.kind_eq(&token) {
+            Ok(token)
+        } else {
+            Err(SyntaxError::ExpectedTokenIn(expected_kind, token, ort).into())
         }
     }
 
@@ -423,5 +414,9 @@ impl Parser {
 
     fn consume(&mut self) -> Token {
         self.lexer.next_token()
+    }
+
+    fn eof(&self) -> bool {
+        matches!(self.peek(), Token::Eof)
     }
 }

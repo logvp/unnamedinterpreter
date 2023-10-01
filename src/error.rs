@@ -54,11 +54,8 @@ pub enum LexerError {
 
 #[derive(Debug)]
 pub enum SyntaxError {
-    ExpectedToken(lexer::Token, lexer::Token),
     ExpectedTokenIn(lexer::Token, lexer::Token, Construct),
-    ExpectedTheseButFound(Vec<lexer::Token>, lexer::Token),
-    ExpectedConstructIn(Construct, Construct),
-    UnexpectedToken(lexer::Token),
+    UnexpectedTokenIn(lexer::Token, Construct),
     ExpressionMayOnlyComeAtEndIn(Construct),
 }
 
@@ -84,31 +81,14 @@ impl Display for LexerError {
 impl Display for SyntaxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ExpectedToken(expected, found) => {
-                write!(f, "Expected {expected} but found {found} instead")
-            }
             Self::ExpectedTokenIn(expected, found, ort) => {
                 write!(
                     f,
                     "While parsing {ort}, expected {expected} but found {found} instead"
                 )
             }
-            Self::ExpectedTheseButFound(expected_list, found) => {
-                write!(f, "Expected ")?;
-                let mut iter = expected_list.iter();
-                if let Some(x) = iter.next() {
-                    write!(f, "{}", x)?;
-                }
-                for x in iter {
-                    write!(f, " or {}", x)?;
-                }
-                write!(f, ", but found {found} instead")
-            }
-            Self::ExpectedConstructIn(expected, ort) => {
-                write!(f, "While parsing {ort} expected {expected}")
-            }
-            Self::UnexpectedToken(found) => {
-                write!(f, "Unexpected token {found}")
+            Self::UnexpectedTokenIn(found, ort) => {
+                write!(f, "While parsing {ort}, found unexpected token {found}")
             }
             Self::ExpressionMayOnlyComeAtEndIn(ort) => {
                 write!(f, "Expression may only be in final position of {ort}")
