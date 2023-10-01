@@ -19,7 +19,6 @@ fn main() -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::*;
     use crate::interpreter::Interpreter;
     use crate::lexer::Lexer;
     use crate::lexer::Token;
@@ -44,23 +43,22 @@ mod tests {
     "#;
 
     impl Lexer {
-        pub fn get_all_tokens(&mut self) -> Result<Vec<Token>, LexerError> {
+        pub fn get_all_tokens(&mut self) -> Vec<Token> {
             let mut tokens: Vec<Token> = Default::default();
             loop {
                 match self.next_token() {
-                    Ok(Token::Eof) => break,
-                    Ok(token) => tokens.push(token),
-                    Err(error) => return Err(error),
+                    Token::Eof => break,
+                    token => tokens.push(token),
                 }
             }
-            Ok(tokens)
+            tokens
         }
     }
 
     #[test]
     fn lexer() {
         let mut lexer = Lexer::lex(PROGRAM.to_owned()).unwrap();
-        println!("--- Tokens ---\n{:?}", lexer.get_all_tokens().unwrap());
+        println!("--- Tokens ---\n{:?}", lexer.get_all_tokens());
     }
 
     #[test]

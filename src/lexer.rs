@@ -196,17 +196,24 @@ impl Lexer {
         Ok(Lexer { tokens })
     }
 
-    pub fn next_token(&mut self) -> Result<Token, LexerError> {
+    pub fn next_token(&mut self) -> Token {
         match self.tokens.pop_front() {
-            Some(tok) => Ok(tok),
-            None => Ok(Token::Eof),
+            Some(tok) => tok,
+            None => Token::Eof,
         }
     }
 
-    pub fn peek(&self) -> Result<&Token, LexerError> {
+    pub fn peek(&self) -> &Token {
         match self.tokens.front() {
-            Some(tok) => Ok(tok),
-            None => Ok(&Token::Eof),
+            Some(tok) => tok,
+            None => &Token::Eof,
+        }
+    }
+
+    pub fn peek_over(&self) -> &Token {
+        match self.tokens.get(1) {
+            Some(tok) => tok,
+            None => &Token::Eof,
         }
     }
 }

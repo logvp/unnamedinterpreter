@@ -3,20 +3,18 @@ use crate::error::{Error, SyntaxError};
 use crate::lexer::{Lexer, Token};
 
 pub struct Parser {
-    token: Option<Token>,
     lexer: Lexer,
 }
 impl Parser {
     pub fn new(text: String) -> Result<Self, Error> {
         Ok(Parser {
-            token: None,
             lexer: Lexer::lex(text)?,
         })
     }
 
     pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
         let mut ast: ast::Ast = Default::default();
-        while !self.token()?.kind_eq(&Token::Eof) {
+        while !matches!(self.token(), Token::Eof) {
             let node = self.parse_ast_node()?;
             match node {
                 ast::AstNode::Statement(_) => ast.push(node),
@@ -26,31 +24,30 @@ impl Parser {
                 }
             }
         }
-        if let Token::Eof = self.token()? {
-            Ok(ast)
-        } else {
-            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
-                ast::Construct::AstNode,
-            ))?
-        }
+
+        self.expect(Token::Eof, |_| {
+            SyntaxError::ExpressionMayOnlyComeAtEndIn(ast::Construct::AstNode).into()
+        })?;
+
+        Ok(ast)
     }
 
     fn parse_ast_node(&mut self) -> Result<ast::AstNode, Error> {
-        if let Some(statement) = match self.token()? {
+        if let Some(statement) = match self.token() {
             Token::Var => {
                 self.consume();
                 let identifier = self.parse_identifier(ast::Construct::Var)?;
-                if let Token::Equal = self.token()? {
-                    self.consume();
+                let equal = self.consume();
+                if let Token::Equal = equal {
                     Some(ast::Statement::Declaration(
                         identifier,
-                        self.parse_expression()?,
+                        self.parse_expression(ast::Construct::Var)?,
                         false,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
-                        self.token()?,
+                        equal,
                         ast::Construct::Var,
                     )
                     .into());
@@ -59,17 +56,17 @@ impl Parser {
             Token::Let => {
                 self.consume();
                 let identifier = self.parse_identifier(ast::Construct::Let)?;
-                if let Token::Equal = self.token()? {
-                    self.consume();
+                let equal = self.consume();
+                if let Token::Equal = equal {
                     Some(ast::Statement::Declaration(
                         identifier,
-                        self.parse_expression()?,
+                        self.parse_expression(ast::Construct::Let)?,
                         true,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
-                        self.token()?,
+                        equal,
                         ast::Construct::Var,
                     )
                     .into());
@@ -78,36 +75,40 @@ impl Parser {
             Token::Set => {
                 self.consume();
                 let lvalue = self.parse_lvalue(ast::Construct::Set)?;
-                if let Token::Equal = self.token()? {
-                    self.consume();
-                    Some(ast::Statement::Assignment(lvalue, self.parse_expression()?))
+                let equal = self.consume();
+                if let Token::Equal = equal {
+                    Some(ast::Statement::Assignment(
+                        lvalue,
+                        self.parse_expression(ast::Construct::Set)?,
+                    ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         Token::Equal,
-                        self.token()?,
+                        equal,
                         ast::Construct::Set,
                     )
                     .into());
                 }
             }
-            Token::Identifier(_) if self.peek()?.kind_eq(&Token::ColonEqual) => {
+            Token::Identifier(_) if matches!(self.peek(), &Token::ColonEqual) => {
                 let identifier = self.parse_identifier(ast::Construct::SimpleDeclaration)?;
                 // consume `:=`
-                self.token()?;
                 self.consume();
                 Some(ast::Statement::Declaration(
                     identifier,
-                    self.parse_expression()?,
+                    self.parse_expression(ast::Construct::SimpleDeclaration)?,
                     false,
                 ))
             }
             // TODO: Only checks for identifier not for Lvalue
-            Token::Identifier(_) if self.peek()?.kind_eq(&Token::Equal) => {
+            Token::Identifier(_) if matches!(self.peek(), Token::Equal) => {
                 let lvalue = self.parse_lvalue(ast::Construct::SimpleAssignment)?;
                 // consume `=`
-                self.token()?;
                 self.consume();
-                Some(ast::Statement::Assignment(lvalue, self.parse_expression()?))
+                Some(ast::Statement::Assignment(
+                    lvalue,
+                    self.parse_expression(ast::Construct::SimpleAssignment)?,
+                ))
             }
             _ => None,
         } {
@@ -116,9 +117,9 @@ impl Parser {
         }
         // Let, Set, SimpleDeclaration, SimpleAssignment cases are covered
         // Statement::Expression and Expression need to be handled
-        let expression = self.parse_expression()?;
+        let expression = self.parse_expression(ast::Construct::Expression)?;
 
-        if let Token::Semicolon = self.token()? {
+        if let Token::Semicolon = self.token() {
             self.consume();
             Ok(ast::AstNode::Statement(ast::Statement::Expression(
                 expression,
@@ -128,8 +129,8 @@ impl Parser {
         }
     }
 
-    fn parse_expression(&mut self) -> Result<ast::Expression, Error> {
-        Ok(match self.token()? {
+    fn parse_expression(&mut self, ort: ast::Construct) -> Result<ast::Expression, Error> {
+        Ok(match self.token() {
             Token::If => self.parse_if_expression()?,
             Token::While => {
                 self.consume();
@@ -149,21 +150,21 @@ impl Parser {
                 ast::Expression::New(body)
             }
             _ => {
-                let lhs: ast::Term = self.parse_term()?;
-                match self.token()? {
+                let lhs: ast::Term = self.parse_term(ort)?;
+                match self.token() {
                     Token::Plus => {
                         self.consume();
-                        ast::Expression::Add(lhs, Box::new(self.parse_expression()?))
+                        ast::Expression::Add(lhs, Box::new(self.parse_expression(ort)?))
                     }
                     Token::Minus => {
                         self.consume();
-                        ast::Expression::Subtract(lhs, Box::new(self.parse_expression()?))
+                        ast::Expression::Subtract(lhs, Box::new(self.parse_expression(ort)?))
                     }
                     Token::EqualEqual => {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::Equal,
                         )
                     }
@@ -171,7 +172,7 @@ impl Parser {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::LessEqual,
                         )
                     }
@@ -179,7 +180,7 @@ impl Parser {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::LessThan,
                         )
                     }
@@ -187,7 +188,7 @@ impl Parser {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::GreaterEqual,
                         )
                     }
@@ -195,7 +196,7 @@ impl Parser {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::GreaterThan,
                         )
                     }
@@ -203,7 +204,7 @@ impl Parser {
                         self.consume();
                         ast::Expression::Compare(
                             lhs,
-                            Box::new(self.parse_expression()?),
+                            Box::new(self.parse_expression(ort)?),
                             ast::Comparison::NotEqual,
                         )
                     }
@@ -213,27 +214,27 @@ impl Parser {
         })
     }
 
-    fn parse_term(&mut self) -> Result<ast::Term, Error> {
-        let lhs: ast::Factor = self.parse_factor()?;
-        Ok(match self.token()? {
+    fn parse_term(&mut self, ort: ast::Construct) -> Result<ast::Term, Error> {
+        let lhs: ast::Factor = self.parse_factor(ort)?;
+        Ok(match self.token() {
             Token::Star => {
                 self.consume();
-                ast::Term::Multiply(lhs, Box::new(self.parse_term()?))
+                ast::Term::Multiply(lhs, Box::new(self.parse_term(ort)?))
             }
             Token::Slash => {
                 self.consume();
-                ast::Term::Divide(lhs, Box::new(self.parse_term()?))
+                ast::Term::Divide(lhs, Box::new(self.parse_term(ort)?))
             }
             Token::PlusPlus => {
                 self.consume();
-                ast::Term::Concatenate(lhs, Box::new(self.parse_term()?))
+                ast::Term::Concatenate(lhs, Box::new(self.parse_term(ort)?))
             }
             _ => ast::Term::Factor(lhs),
         })
     }
 
-    fn parse_factor(&mut self) -> Result<ast::Factor, Error> {
-        let factor = match self.token()? {
+    fn parse_factor(&mut self, ort: ast::Construct) -> Result<ast::Factor, Error> {
+        let factor = match self.token() {
             Token::Lambda => self.parse_lambda_expression()?,
             Token::LeftParen => ast::Factor::Expression(Box::new(
                 self.parse_parenthetical_expression(ast::Construct::Expression)?,
@@ -241,19 +242,21 @@ impl Parser {
             Token::LeftBrace => ast::Factor::Block(self.parse_braced_block()?),
             Token::Minus => {
                 self.consume();
-                ast::Factor::Negate(Box::new(self.parse_factor()?))
+                ast::Factor::Negate(Box::new(self.parse_factor(ort)?))
             }
             Token::Literal(literal) => {
+                let literal = literal.to_owned();
                 self.consume();
                 ast::Factor::Literal(literal)
             }
             Token::Identifier(name) => {
+                let name = name.to_owned();
                 self.consume();
                 ast::Factor::Variable(ast::Identifier { name })
             }
-            _ => Err(SyntaxError::UnexpectedToken(self.token()?))?,
+            _ => Err(SyntaxError::UnexpectedToken(self.consume()))?,
         };
-        if let Token::LeftParen = self.token()? {
+        if let Token::LeftParen = self.token() {
             self.parse_function_call(factor)
         } else {
             Ok(factor)
@@ -264,41 +267,25 @@ impl Parser {
         &mut self,
         ort: ast::Construct,
     ) -> Result<ast::Expression, Error> {
-        if let Token::LeftParen = self.token()? {
-            self.consume();
-            let parenthesized = self.parse_expression()?;
-            if let Token::RightParen = self.token()? {
-                self.consume();
-                Ok(parenthesized)
-            } else {
-                Err(SyntaxError::ExpectedTokenIn(
-                    Token::RightParen,
-                    self.token()?,
-                    ort,
-                ))?
-            }
-        } else {
-            Err(SyntaxError::ExpectedTokenIn(
-                Token::LeftParen,
-                self.token()?,
-                ort,
-            ))?
-        }
+        self.expect(Token::LeftParen, |lparen| {
+            SyntaxError::ExpectedToken(Token::LeftParen, lparen).into()
+        })?;
+
+        let parenthesized = self.parse_expression(ort)?;
+
+        self.expect(Token::RightParen, |rparen| {
+            SyntaxError::ExpectedToken(Token::RightParen, rparen).into()
+        })?;
+
+        Ok(parenthesized)
     }
 
     fn parse_braced_block(&mut self) -> Result<ast::Block, Error> {
-        if let Token::LeftBrace = self.token()? {
-            self.consume();
-        } else {
-            return Err(SyntaxError::ExpectedTokenIn(
-                Token::LeftBrace,
-                self.token()?,
-                ast::Construct::Block,
-            )
-            .into());
-        }
+        self.expect(Token::LeftBrace, |tok| {
+            SyntaxError::ExpectedTokenIn(Token::LeftBrace, tok, ast::Construct::Block).into()
+        })?;
         let mut block: Vec<ast::AstNode> = Default::default();
-        while !self.token()?.kind_eq(&Token::RightBrace) {
+        while !matches!(self.token(), Token::RightBrace) {
             let node = self.parse_ast_node()?;
             match node {
                 ast::AstNode::Statement(_) => {
@@ -310,32 +297,28 @@ impl Parser {
                 }
             }
         }
-        if let Token::RightBrace = self.token()? {
-            self.consume();
-        } else {
-            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
-                ast::Construct::Block,
-            ))?
-        }
+        self.expect(Token::RightBrace, |_| {
+            SyntaxError::ExpressionMayOnlyComeAtEndIn(ast::Construct::Block).into()
+        })?;
 
         Ok(ast::Block(block))
     }
 
     fn parse_if_expression(&mut self) -> Result<ast::Expression, Error> {
-        if let Token::If = self.token()? {
+        if let Token::If = self.token() {
             self.consume();
         } else {
             unreachable!()
         }
         let cond = self.parse_parenthetical_expression(ast::Construct::If)?;
         let body = self.parse_braced_block()?;
-        let else_ = match self.token()? {
+        let else_ = match (self.token(), self.peek()) {
             // else if
-            Token::Else if self.peek()?.kind_eq(&Token::If) => {
+            (Token::Else, Token::If) => {
                 self.consume();
                 ast::Block(vec![ast::AstNode::Expression(self.parse_if_expression()?)])
             }
-            Token::Else => {
+            (Token::Else, _) => {
                 self.consume();
                 self.parse_braced_block()?
             }
@@ -345,45 +328,37 @@ impl Parser {
     }
 
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
-        if let Token::Lambda = self.token()? {
-            self.consume();
-        } else {
-            return Err(SyntaxError::ExpectedToken(Token::Lambda, self.token()?).into());
-        }
+        const PARAMS: ast::Construct = ast::Construct::ParameterList;
+        self.expect(Token::Lambda, |tok| {
+            SyntaxError::ExpectedToken(Token::Lambda, tok).into()
+        })?;
+
+        self.expect(Token::LeftParen, |_| {
+            SyntaxError::ExpectedConstructIn(PARAMS, ast::Construct::Lambda).into()
+        })?;
+
         let mut params: Vec<ast::Identifier> = Default::default();
-        if let Token::LeftParen = self.token()? {
-            self.consume();
-        } else {
-            return Err(SyntaxError::ExpectedConstructIn(
-                ast::Construct::ParameterList,
-                ast::Construct::Lambda,
-            )
-            .into());
-        }
-        while !self.token()?.kind_eq(&Token::RightParen) {
-            params.push(self.parse_identifier(ast::Construct::ParameterList)?);
-            if let Token::Comma = self.token()? {
-                self.consume();
-                continue;
-            } else if let Token::RightParen = self.token()? {
-                break;
-            } else {
-                Err(SyntaxError::ExpectedTheseButFound(
-                    vec![Token::Comma, Token::RightParen],
-                    self.token()?,
-                ))?;
+
+        if !matches!(self.token(), Token::RightParen) {
+            params.push(self.parse_identifier(PARAMS)?);
+
+            while matches!(self.token(), Token::Comma) {
+                self.consume(); // ,
+                params.push(self.parse_identifier(PARAMS)?);
             }
         }
-        self.consume(); // consume `)`
+        self.expect(Token::RightParen, |tok| {
+            SyntaxError::ExpectedTokenIn(Token::RightParen, tok, PARAMS).into()
+        })?;
 
-        let block = self.parse_braced_block()?;
+        let body = self.parse_braced_block()?;
 
-        Ok(ast::Factor::Lambda(params, block))
+        Ok(ast::Factor::Lambda(params, body))
     }
 
     fn parse_function_call(&mut self, func: ast::Factor) -> Result<ast::Factor, Error> {
         let call = ast::Factor::FunctionCall(Box::new(func), self.parse_function_args()?);
-        if let Token::LeftParen = self.token()? {
+        if let Token::LeftParen = self.token() {
             self.parse_function_call(call)
         } else {
             Ok(call)
@@ -391,34 +366,23 @@ impl Parser {
     }
 
     fn parse_function_args(&mut self) -> Result<Vec<ast::Expression>, Error> {
-        if let Token::LeftParen = self.token()? {
-            self.consume();
-            let mut args: Vec<ast::Expression> = Default::default();
-            while !self.token()?.kind_eq(&Token::RightParen) {
-                args.push(self.parse_expression()?);
-                // this allows for trailing commas. should that be an error?
-                if let Token::Comma = self.token()? {
-                    self.consume();
-                    continue;
-                } else if let Token::RightParen = self.token()? {
-                    break;
-                } else {
-                    Err(SyntaxError::ExpectedTheseButFound(
-                        vec![Token::Comma, Token::RightParen],
-                        self.token()?,
-                    ))?;
-                }
+        const ORT: ast::Construct = ast::Construct::FunctionCall;
+        self.expect(Token::LeftParen, |tok| {
+            SyntaxError::ExpectedTokenIn(Token::LeftParen, tok, ORT).into()
+        })?;
+        let mut args: Vec<ast::Expression> = Default::default();
+        if !matches!(self.token(), Token::RightParen) {
+            args.push(self.parse_expression(ORT)?);
+
+            while matches!(self.token(), Token::Comma) {
+                self.consume(); // ,
+                args.push(self.parse_expression(ORT)?);
             }
-            self.consume(); // consume `)`
-            Ok(args)
-        } else {
-            Err(SyntaxError::ExpectedTokenIn(
-                Token::LeftParen,
-                self.token()?,
-                ast::Construct::FunctionCall,
-            )
-            .into())
         }
+        self.expect(Token::RightParen, |tok| {
+            SyntaxError::ExpectedTokenIn(Token::RightParen, tok, ORT).into()
+        })?;
+        Ok(args)
     }
 
     fn parse_lvalue(&mut self, ort: ast::Construct) -> Result<ast::Lvalue, Error> {
@@ -426,56 +390,38 @@ impl Parser {
     }
 
     fn parse_identifier(&mut self, ort: ast::Construct) -> Result<ast::Identifier, Error> {
-        if let Token::Identifier(name) = self.token()? {
-            self.consume();
+        let ident = self.consume();
+        if let Token::Identifier(name) = ident {
             Ok(ast::Identifier { name })
         } else {
-            Err(
-                SyntaxError::ExpectedTokenIn(Token::Identifier(String::new()), self.token()?, ort)
-                    .into(),
-            )
+            Err(SyntaxError::ExpectedTokenIn(Token::Identifier(String::new()), ident, ort).into())
         }
     }
 
-    fn expect_semicolon(&mut self) -> Result<(), Error> {
-        if let Token::Semicolon = self.token()? {
-            self.consume();
-            Ok(())
+    fn expect_semicolon(&mut self) -> Result<Token, Error> {
+        self.expect(Token::Semicolon, |tok| {
+            SyntaxError::ExpectedTokenIn(Token::Semicolon, tok, ast::Construct::Statement).into()
+        })
+    }
+
+    fn expect(&mut self, expected_kind: Token, err: fn(Token) -> Error) -> Result<Token, Error> {
+        let token = self.consume();
+        if expected_kind.kind_eq(&token) {
+            Ok(token)
         } else {
-            Err(SyntaxError::ExpectedTokenIn(
-                Token::Semicolon,
-                self.token()?,
-                ast::Construct::Statement,
-            )
-            .into())
+            Err(err(token))
         }
     }
 
-    fn token(&mut self) -> Result<Token, Error> {
-        if self.token.is_none() {
-            self.advance_token()?;
-        }
-        Ok(self.token.clone().unwrap())
+    fn token(&self) -> &Token {
+        self.lexer.peek()
     }
 
-    fn peek(&mut self) -> Result<&Token, Error> {
-        self.token()?;
-        Ok(self.lexer.peek()?)
+    fn peek(&self) -> &Token {
+        self.lexer.peek_over()
     }
 
-    fn consume(&mut self) {
-        if self.token.is_none() {
-            // Error in the parser logic not in user program
-            panic!("tried to consume same token twice")
-        }
-        self.token = None
-    }
-
-    fn advance_token(&mut self) -> Result<(), Error> {
-        self.token = match self.lexer.next_token() {
-            Ok(v) => Some(v),
-            Err(e) => Err(e)?,
-        };
-        Ok(())
+    fn consume(&mut self) -> Token {
+        self.lexer.next_token()
     }
 }

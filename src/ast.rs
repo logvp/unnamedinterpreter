@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Construct {
     Ast,
     AstNode,
