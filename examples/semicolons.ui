@@ -1,0 +1,47 @@
+"
+The interpreter understands two concepts, Statements and Expressions.
+Some constructs like declaration and assignment are always statements,
+but any expression can become a statement by ending it with a semicolon.
+
+A code block or top level code in either a file or in the REPL can have
+any number of statements and can end with 0 or 1 expressions
+";
+
+var x = 12;
+x = 99;
+print(x);
+
+let y = if (x > 50) {
+    let a = "statement";
+    let b = "another statement";
+    "12 + 13 becomes a statement when terminated with a semicolon";
+    12 + 13;
+    "hello, world"
+} else {
+    "not hello, world"
+};
+"hello, world is the final and only expression in the if";
+print(y);
+
+"
+Above, all statements are ended with a semicolon. However, the interpreter
+is able to automatically insert a semicolon on line breaks if required.
+
+A semicolon will only be inserted if it would be an ERROR if there were no semicolon.
+"
+
+var x2 = 12
+x2 = 99
+print(x2)
+
+let y2 = if (x2 > 50) {
+    let a = "statement"
+    let b = "another statement"
+    "Expressions that are not in the final position of a block must still be terminated with a semicolon";
+    12 + 13;
+    "hello, world"
+} else {
+    "not hello, world"
+}
+"hello, world is the final and only expression in the if"
+print(y2)

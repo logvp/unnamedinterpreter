@@ -19,8 +19,14 @@ impl Parser {
             match node {
                 ast::AstNode::Statement(_) => ast.push(node),
                 ast::AstNode::Expression(_) => {
-                    ast.push(node);
-                    break;
+                    if !matches!(self.token(), Token::Eof) {
+                        let ast::AstNode::Expression(expr) = node else {unreachable!()};
+                        self.expect_semicolon()?;
+                        ast.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
+                    } else {
+                        ast.push(node);
+                        break;
+                    }
                 }
             }
         }
@@ -383,7 +389,15 @@ impl Parser {
     }
 
     fn expect_semicolon(&mut self) -> Result<Token, Error> {
-        self.expect(Token::Semicolon, ast::Construct::Statement)
+        let token = self.lexer.next_token_nts();
+        if matches!(token, Token::Semicolon) {
+            Ok(token)
+        } else {
+            Err(
+                SyntaxError::ExpectedTokenIn(Token::Semicolon, token, ast::Construct::Statement)
+                    .into(),
+            )
+        }
     }
 
     fn expect_f(&mut self, expected_kind: Token, err: fn(Token) -> Error) -> Result<Token, Error> {

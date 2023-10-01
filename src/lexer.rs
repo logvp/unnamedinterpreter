@@ -41,6 +41,7 @@ pub enum Token {
     Tilde,
     Question,
     Eof,
+    Newline,
 }
 impl Token {
     pub fn kind_eq(&self, other: &Token) -> bool {
@@ -89,6 +90,7 @@ impl Display for Token {
                 Self::Tilde => "`~`",
                 Self::Question => "`?`",
                 Self::Eof => "[End Of File]",
+                Self::Newline => panic!("[Newline] should be transparent"),
             }
         )
     }
@@ -109,6 +111,10 @@ impl Lexer {
                 '\n' => {
                     loc.line += 1;
                     loc.col = 0;
+                    // consecutive newlines are not needed
+                    if !matches!(tokens.back(), Some(Token::Newline)) {
+                        tokens.push_back(Token::Newline)
+                    }
                 }
                 _ if c.is_whitespace() => {
                     loc.col += 1;
@@ -198,20 +204,50 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Token {
         match self.tokens.pop_front() {
+            Some(Token::Newline) => self.next_token(),
             Some(tok) => tok,
             None => Token::Eof,
         }
     }
 
     pub fn peek(&self) -> &Token {
-        match self.tokens.front() {
+        match self
+            .tokens
+            .iter()
+            .filter(|x| !matches!(x, Token::Newline))
+            .next()
+        {
+            Some(Token::Newline) => self.peek_over(),
             Some(tok) => tok,
             None => &Token::Eof,
         }
     }
 
     pub fn peek_over(&self) -> &Token {
-        match self.tokens.get(1) {
+        match self
+            .tokens
+            .iter()
+            .filter(|x| !matches!(x, Token::Newline))
+            .nth(1)
+        {
+            Some(tok) => tok,
+            None => &Token::Eof,
+        }
+    }
+
+    // next and convert Newline To Semicolon
+    pub fn next_token_nts(&mut self) -> Token {
+        match self.tokens.pop_front() {
+            Some(Token::Newline) => Token::Semicolon,
+            Some(tok) => tok,
+            None => Token::Eof,
+        }
+    }
+
+    // peek anc convert Newline To Semicolon
+    pub fn peek_nts(&self) -> &Token {
+        match self.tokens.front() {
+            Some(Token::Newline) => &Token::Semicolon,
             Some(tok) => tok,
             None => &Token::Eof,
         }
