@@ -23,6 +23,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::lexer::Token;
     use crate::parser::Parser;
+    use crate::repl;
 
     const PROGRAM: &str = r#"
     var x = 15;
@@ -57,13 +58,13 @@ mod tests {
 
     #[test]
     fn lexer() {
-        let mut lexer = Lexer::lex(PROGRAM.to_owned()).unwrap();
+        let mut lexer = Lexer::lex(PROGRAM).unwrap();
         println!("--- Tokens ---\n{:?}", lexer.get_all_tokens());
     }
 
     #[test]
     fn parser() {
-        let mut parser = Parser::new(PROGRAM.to_owned()).unwrap();
+        let mut parser = Parser::new(PROGRAM).unwrap();
         let ast = parser.gen_ast().unwrap();
         println!("--- AST ---\n{}", ast);
     }
@@ -71,27 +72,10 @@ mod tests {
     #[test]
     fn interpreter() {
         let mut interpreter = Interpreter::new();
-        let ret = interpreter.interpret(PROGRAM.to_owned());
+        let ret = interpreter.interpret(PROGRAM);
         println!("--- Results ---");
         for v in ret {
             println!("OK: {:?}", v.unwrap())
-        }
-    }
-
-    fn run_file<P: AsRef<std::path::Path>>(path: &P) {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            let result = Interpreter::new().interpret(content);
-            for it in result {
-                println!("{}", it.unwrap());
-            }
-        } else {
-            println!(
-                "Could not open file '{}'",
-                path.as_ref()
-                    .file_name()
-                    .expect("Couldn't open file and can't display file name")
-                    .to_string_lossy()
-            );
         }
     }
 
@@ -100,7 +84,7 @@ mod tests {
         use std::fs;
 
         for file in fs::read_dir("./examples").unwrap() {
-            run_file(&file.unwrap().path());
+            repl::run_file(&file.unwrap().path()).unwrap();
         }
     }
 }

@@ -6,7 +6,7 @@ pub struct Parser {
     lexer: Lexer,
 }
 impl Parser {
-    pub fn new(text: String) -> Result<Self, Error> {
+    pub fn new(text: &str) -> Result<Self, Error> {
         Ok(Parser {
             lexer: Lexer::lex(text)?,
         })

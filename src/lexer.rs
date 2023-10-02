@@ -101,7 +101,7 @@ pub struct Lexer {
     tokens: VecDeque<Token>,
 }
 impl Lexer {
-    pub fn lex(text: String) -> Result<Self, LexerError> {
+    pub fn lex(text: &str) -> Result<Self, LexerError> {
         let mut chars = text.chars().peekable();
         let mut tokens = VecDeque::new();
         let mut buffer = String::new();
