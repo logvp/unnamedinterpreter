@@ -50,6 +50,8 @@ impl Display for Error {
 pub enum LexerError {
     UnknownToken(String, Loc),
     UnterminatedStringLiteral(String, Loc),
+    BadHexLiteral(String, Loc),
+    BadBinLiteral(String, Loc),
 }
 
 #[derive(Debug)]
@@ -74,6 +76,12 @@ impl Display for LexerError {
             Self::UnknownToken(tok, loc) => write!(f, "Unknown token {} at {}", tok, loc),
             Self::UnterminatedStringLiteral(string, loc) => {
                 write!(f, "Unterminated string literal \"{}\" at {}", string, loc)
+            }
+            Self::BadHexLiteral(string, loc) => {
+                write!(f, "Invalid hex literal \"0x{}\" at {}", string, loc)
+            }
+            Self::BadBinLiteral(string, loc) => {
+                write!(f, "Invalid binary literal \"0b{}\" at {}", string, loc)
             }
         }
     }

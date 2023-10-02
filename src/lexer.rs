@@ -119,6 +119,26 @@ impl Lexer {
                 _ if c.is_whitespace() => {
                     loc.col += 1;
                 }
+                '0' if chars.next_if_eq(&'x').is_some() => {
+                    buffer.clear();
+                    while let Some(digit) = chars.next_if(|d| d.is_alphanumeric()) {
+                        buffer.push(digit);
+                    }
+                    match i32::from_str_radix(&buffer, 0x10) {
+                        Ok(int) => tokens.push_back(Token::Literal(Literal::Integer(int))),
+                        Err(_) => return Err(LexerError::BadHexLiteral(buffer, loc)),
+                    }
+                }
+                '0' if chars.next_if_eq(&'b').is_some() => {
+                    buffer.clear();
+                    while let Some(digit) = chars.next_if(|d| d.is_alphanumeric()) {
+                        buffer.push(digit);
+                    }
+                    match i32::from_str_radix(&buffer, 0b10) {
+                        Ok(int) => tokens.push_back(Token::Literal(Literal::Integer(int))),
+                        Err(_) => return Err(LexerError::BadBinLiteral(buffer, loc)),
+                    }
+                }
                 _ if c.is_digit(10) => {
                     buffer.clear();
                     buffer.push(c);
