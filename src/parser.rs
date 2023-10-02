@@ -149,19 +149,19 @@ impl Parser {
             TokenKind::If => self.parse_if_expression()?,
             TokenKind::While => {
                 self.consume();
-                let cond = self.parse_parenthetical_expression(ast::Construct::While)?;
-                let body = self.parse_braced_block()?;
+                let cond = self.parse_parenthetical_expression(ast::Construct::WhileCondition)?;
+                let body = self.parse_braced_block(ast::Construct::WhileBody)?;
                 ast::Expression::While(Box::new(cond), body)
             }
             TokenKind::With => {
                 self.consume();
                 let object = self.parse_parenthetical_expression(ast::Construct::With)?;
-                let body = self.parse_braced_block()?;
+                let body = self.parse_braced_block(ast::Construct::With)?;
                 ast::Expression::With(Box::new(object), body)
             }
             TokenKind::New => {
                 self.consume();
-                let body = self.parse_braced_block()?;
+                let body = self.parse_braced_block(ast::Construct::NewBlock)?;
                 ast::Expression::New(body)
             }
             _ => {
@@ -254,7 +254,9 @@ impl Parser {
             TokenKind::LeftParen => ast::Factor::Expression(Box::new(
                 self.parse_parenthetical_expression(ast::Construct::Expression)?,
             )),
-            TokenKind::LeftBrace => ast::Factor::Block(self.parse_braced_block()?),
+            TokenKind::LeftBrace => {
+                ast::Factor::Block(self.parse_braced_block(ast::Construct::BlockScope)?)
+            }
             TokenKind::Minus => {
                 self.consume();
                 ast::Factor::Negate(Box::new(self.parse_factor(ort)?))
@@ -294,8 +296,8 @@ impl Parser {
         Ok(parenthesized)
     }
 
-    fn parse_braced_block(&mut self) -> Result<ast::Block, Error> {
-        self.expect(TokenKind::LeftBrace, ast::Construct::Block)?;
+    fn parse_braced_block(&mut self, ort: ast::Construct) -> Result<ast::Block, Error> {
+        self.expect(TokenKind::LeftBrace, ort)?;
         let mut block: Vec<ast::AstNode> = Default::default();
         while !matches!(self.token(), TokenKind::RightBrace) {
             let node = self.parse_ast_node()?;
@@ -313,10 +315,7 @@ impl Parser {
         if let TokenKind::RightBrace = self.consume() {
             Ok(ast::Block(block))
         } else {
-            Err(
-                SyntaxError::ExpressionMayOnlyComeAtEndIn(ast::Construct::Block, self.loc.clone())
-                    .into(),
-            )
+            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
         }
     }
 
@@ -326,8 +325,8 @@ impl Parser {
         } else {
             unreachable!()
         }
-        let cond = self.parse_parenthetical_expression(ast::Construct::If)?;
-        let body = self.parse_braced_block()?;
+        let cond = self.parse_parenthetical_expression(ast::Construct::IfCondition)?;
+        let body = self.parse_braced_block(ast::Construct::IfBody)?;
         let else_ = match (self.token(), self.peek()) {
             // else if
             (TokenKind::Else, TokenKind::If) => {
@@ -336,7 +335,7 @@ impl Parser {
             }
             (TokenKind::Else, _) => {
                 self.consume();
-                self.parse_braced_block()?
+                self.parse_braced_block(ast::Construct::ElseBody)?
             }
             _ => Default::default(),
         };
@@ -346,7 +345,7 @@ impl Parser {
     fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
         self.expect(TokenKind::Lambda, ast::Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
-        let body = self.parse_braced_block()?;
+        let body = self.parse_braced_block(ast::Construct::LambdaBody)?;
         Ok(ast::Factor::Lambda(params, body))
     }
 
