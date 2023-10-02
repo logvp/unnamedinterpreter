@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn lexer() {
-        let lexer = Lexer::lex(PROGRAM).unwrap();
+        let lexer = Lexer::lex(PROGRAM, None).unwrap();
         println!(
             "--- Tokens ---\n{:?}",
             lexer.peek_all_tokens().collect::<Vec<_>>()
@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn parser() {
-        let mut parser = Parser::new(PROGRAM).unwrap();
+        let mut parser = Parser::new(PROGRAM, None).unwrap();
         let ast = parser.gen_ast().unwrap();
         println!("--- AST ---\n{}", ast);
     }
@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn interpreter() {
         let mut interpreter = Interpreter::new();
-        let ret = interpreter.interpret(PROGRAM);
+        let ret = interpreter.interpret(PROGRAM, None);
         println!("--- Results ---");
         for v in ret {
             println!("OK: {:?}", v.unwrap())

@@ -1,6 +1,7 @@
 use crate::ast::Construct;
 use crate::lexer;
 use std::fmt::Display;
+use std::rc::Rc;
 
 pub use crate::interpreter::RuntimeType;
 
@@ -8,15 +9,23 @@ pub use crate::interpreter::RuntimeType;
 pub struct Loc {
     pub line: usize,
     pub col: usize,
+    pub filename: Option<Rc<str>>,
 }
 impl Display for Loc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "line: {}, col: {}", self.line, self.col)
+        match &self.filename {
+            Some(name) => write!(f, "{name}:{}:{}:", self.line, self.col),
+            None => write!(f, "REPL:{}:{}:", self.line, self.col),
+        }
     }
 }
-impl Default for Loc {
-    fn default() -> Self {
-        Loc { line: 1, col: 0 }
+impl Loc {
+    pub fn new(filename: Option<Rc<str>>) -> Self {
+        Loc {
+            line: 1,
+            col: 1,
+            filename,
+        }
     }
 }
 

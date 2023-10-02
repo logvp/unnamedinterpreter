@@ -182,10 +182,14 @@ impl Interpreter {
     fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
         node.eval(self.context.clone())
     }
-    pub fn interpret(&mut self, text: &str) -> Vec<Result<RuntimeValue, Error>> {
+    pub fn interpret(
+        &mut self,
+        text: &str,
+        filename: Option<Rc<str>>,
+    ) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
         let mut parser = {
-            match Parser::new(text) {
+            match Parser::new(text, filename) {
                 Ok(parser) => parser,
                 Err(e) => {
                     ret.push(Err(e));

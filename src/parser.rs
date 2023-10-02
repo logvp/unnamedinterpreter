@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::ast;
 use crate::error::{Error, Loc, SyntaxError};
 use crate::lexer::{Lexer, Token, TokenKind};
@@ -7,10 +9,10 @@ pub struct Parser {
     loc: Loc,
 }
 impl Parser {
-    pub fn new(text: &str) -> Result<Self, Error> {
+    pub fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
         Ok(Parser {
-            lexer: Lexer::lex(text)?,
-            loc: Default::default(),
+            lexer: Lexer::lex(text, filename.clone())?,
+            loc: Loc::new(filename),
         })
     }
 
@@ -421,19 +423,6 @@ impl Parser {
                 loc,
             )
             .into())
-        }
-    }
-
-    fn expect_f(
-        &mut self,
-        expected_kind: TokenKind,
-        err: fn(TokenKind) -> Error,
-    ) -> Result<TokenKind, Error> {
-        let token = self.consume();
-        if expected_kind.kind_eq(&token) {
-            Ok(token)
-        } else {
-            Err(err(token))
         }
     }
 

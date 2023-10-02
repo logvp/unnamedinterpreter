@@ -19,8 +19,8 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     pub fn new(input: I, output: O) -> Self {
         Repl {
             interpreter: Interpreter::new(),
-            input: input,
-            output: output,
+            input,
+            output,
             macros: HashMap::new(),
             name: String::new(),
             macro_buffer: String::new(),
@@ -102,7 +102,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     }
     fn play_macro(&mut self, name: String) -> io::Result<()> {
         let playback = self.macros.get(&name).unwrap();
-        let result = self.interpreter.interpret(playback);
+        let result = self.interpreter.interpret(playback, None);
         Self::print_results(&mut self.output, &result)?;
         Ok(())
     }
@@ -116,7 +116,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
             writeln!(self.output, "REPL: `:{{` must come before `:}}`")?;
             return Ok(());
         }
-        let result = self.interpreter.interpret(&self.multiline_buffer);
+        let result = self.interpreter.interpret(&self.multiline_buffer, None);
         Self::print_results(&mut self.output, &result)?;
         self.multiline = false;
         self.multiline_buffer.clear();
@@ -139,7 +139,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
             if self.recording {
                 self.macro_buffer.push_str(&buffer);
             }
-            let result = self.interpreter.interpret(&buffer);
+            let result = self.interpreter.interpret(&buffer, None);
             Self::print_results(&mut self.output, &result)?;
         }
         Ok(true)
@@ -168,7 +168,13 @@ pub fn init() -> io::Result<()> {
 
 pub fn run_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
     if let Ok(content) = std::fs::read_to_string(path) {
-        let result = Interpreter::new().interpret(&content);
+        let result = Interpreter::new().interpret(
+            &content,
+            path.as_ref()
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.into()),
+        );
         Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
     } else {
         println!(

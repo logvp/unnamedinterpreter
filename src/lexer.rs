@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Display};
+use std::{collections::VecDeque, fmt::Display, rc::Rc};
 
 pub use crate::ast::Literal;
 use crate::error::{LexerError, Loc};
@@ -108,11 +108,11 @@ pub struct Lexer {
     end: Loc,
 }
 impl Lexer {
-    pub fn lex(text: &str) -> Result<Self, LexerError> {
+    pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexerError> {
         let mut chars = text.chars().peekable();
         let mut tokens: VecDeque<Token> = VecDeque::new();
         let mut buffer = String::new();
-        let mut loc = Loc::default();
+        let mut loc = Loc::new(filename);
         fn add_tok(tokens: &mut VecDeque<Token>, kind: TokenKind, loc: &Loc) {
             tokens.push_back(Token {
                 kind,
