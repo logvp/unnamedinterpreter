@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 pub use crate::interpreter::RuntimeType;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone)]
 pub struct Loc {
     pub line: usize,
     pub col: usize,
@@ -12,6 +12,11 @@ pub struct Loc {
 impl Display for Loc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "line: {}, col: {}", self.line, self.col)
+    }
+}
+impl Default for Loc {
+    fn default() -> Self {
+        Loc { line: 1, col: 0 }
     }
 }
 
@@ -56,9 +61,9 @@ pub enum LexerError {
 
 #[derive(Debug)]
 pub enum SyntaxError {
-    ExpectedTokenIn(lexer::Token, lexer::Token, Construct),
-    UnexpectedTokenIn(lexer::Token, Construct),
-    ExpressionMayOnlyComeAtEndIn(Construct),
+    ExpectedTokenIn(lexer::TokenKind, lexer::TokenKind, Construct, Loc),
+    UnexpectedTokenIn(lexer::TokenKind, Construct, Loc),
+    ExpressionMayOnlyComeAtEndIn(Construct, Loc),
 }
 
 #[derive(Debug)]
@@ -89,17 +94,20 @@ impl Display for LexerError {
 impl Display for SyntaxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ExpectedTokenIn(expected, found, ort) => {
+            Self::ExpectedTokenIn(expected, found, ort, loc) => {
                 write!(
                     f,
-                    "While parsing {ort}, expected {expected} but found {found} instead"
+                    "{loc} While parsing {ort}, expected {expected} but found {found} instead"
                 )
             }
-            Self::UnexpectedTokenIn(found, ort) => {
-                write!(f, "While parsing {ort}, found unexpected token {found}")
+            Self::UnexpectedTokenIn(found, ort, loc) => {
+                write!(
+                    f,
+                    "{loc} While parsing {ort}, found unexpected token {found}"
+                )
             }
-            Self::ExpressionMayOnlyComeAtEndIn(ort) => {
-                write!(f, "Expression may only be in final position of {ort}")
+            Self::ExpressionMayOnlyComeAtEndIn(ort, loc) => {
+                write!(f, "{loc} Expression may only be in final position of {ort}")
             }
         }
     }

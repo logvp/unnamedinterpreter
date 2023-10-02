@@ -3,8 +3,14 @@ use std::{collections::VecDeque, fmt::Display};
 pub use crate::ast::Literal;
 use crate::error::{LexerError, Loc};
 
-#[derive(Debug, Clone)]
-pub enum Token {
+#[derive(Debug)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub loc: Loc,
+}
+
+#[derive(Debug)]
+pub enum TokenKind {
     Literal(Literal),
     Identifier(String),
     LeftParen,
@@ -43,12 +49,12 @@ pub enum Token {
     Eof,
     Newline,
 }
-impl Token {
-    pub fn kind_eq(&self, other: &Token) -> bool {
+impl TokenKind {
+    pub fn kind_eq(&self, other: &TokenKind) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other)
     }
 }
-impl Display for Token {
+impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -99,21 +105,34 @@ impl Display for Token {
 #[derive(Debug)]
 pub struct Lexer {
     tokens: VecDeque<Token>,
+    end: Loc,
 }
 impl Lexer {
     pub fn lex(text: &str) -> Result<Self, LexerError> {
         let mut chars = text.chars().peekable();
-        let mut tokens = VecDeque::new();
+        let mut tokens: VecDeque<Token> = VecDeque::new();
         let mut buffer = String::new();
         let mut loc = Loc::default();
+        fn add_tok(tokens: &mut VecDeque<Token>, kind: TokenKind, loc: &Loc) {
+            tokens.push_back(Token {
+                kind,
+                loc: loc.clone(),
+            })
+        }
         while let Some(c) = chars.next() {
             match c {
                 '\n' => {
                     loc.line += 1;
                     loc.col = 0;
                     // consecutive newlines are not needed
-                    if !matches!(tokens.back(), Some(Token::Newline)) {
-                        tokens.push_back(Token::Newline)
+                    if !matches!(
+                        tokens.back(),
+                        Some(Token {
+                            kind: TokenKind::Newline,
+                            ..
+                        })
+                    ) {
+                        add_tok(&mut tokens, TokenKind::Newline, &loc)
                     }
                 }
                 _ if c.is_whitespace() => {
@@ -125,7 +144,9 @@ impl Lexer {
                         buffer.push(digit);
                     }
                     match i32::from_str_radix(&buffer, 0x10) {
-                        Ok(int) => tokens.push_back(Token::Literal(Literal::Integer(int))),
+                        Ok(int) => {
+                            add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
+                        }
                         Err(_) => return Err(LexerError::BadHexLiteral(buffer, loc)),
                     }
                 }
@@ -135,7 +156,9 @@ impl Lexer {
                         buffer.push(digit);
                     }
                     match i32::from_str_radix(&buffer, 0b10) {
-                        Ok(int) => tokens.push_back(Token::Literal(Literal::Integer(int))),
+                        Ok(int) => {
+                            add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
+                        }
                         Err(_) => return Err(LexerError::BadBinLiteral(buffer, loc)),
                     }
                 }
@@ -145,7 +168,11 @@ impl Lexer {
                     while let Some(digit) = chars.next_if(|d| d.is_digit(10)) {
                         buffer.push(digit);
                     }
-                    tokens.push_back(Token::Literal(Literal::Integer(buffer.parse().unwrap())))
+                    add_tok(
+                        &mut tokens,
+                        TokenKind::Literal(Literal::Integer(buffer.parse().unwrap())),
+                        &loc,
+                    )
                 }
                 '"' => {
                     buffer.clear();
@@ -154,36 +181,52 @@ impl Lexer {
                         buffer.push(c);
                     }
                     if let Some('"') = chars.next() {
-                        tokens.push_back(Token::Literal(Literal::String(buffer.clone())))
+                        add_tok(
+                            &mut tokens,
+                            TokenKind::Literal(Literal::String(buffer.clone())),
+                            &loc,
+                        )
                     } else {
                         return Err(LexerError::UnterminatedStringLiteral(buffer, loc));
                     }
                 }
-                '<' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::LessEqual),
-                '>' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::GreaterEqual),
-                '+' if chars.next_if_eq(&'+').is_some() => tokens.push_back(Token::PlusPlus),
-                ':' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::ColonEqual),
-                '=' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::EqualEqual),
-                '/' if chars.next_if_eq(&'=').is_some() => tokens.push_back(Token::SlashEqual),
+                '<' if chars.next_if_eq(&'=').is_some() => {
+                    add_tok(&mut tokens, TokenKind::LessEqual, &loc)
+                }
+                '>' if chars.next_if_eq(&'=').is_some() => {
+                    add_tok(&mut tokens, TokenKind::GreaterEqual, &loc)
+                }
+                '+' if chars.next_if_eq(&'+').is_some() => {
+                    add_tok(&mut tokens, TokenKind::PlusPlus, &loc)
+                }
+                ':' if chars.next_if_eq(&'=').is_some() => {
+                    add_tok(&mut tokens, TokenKind::ColonEqual, &loc)
+                }
+                '=' if chars.next_if_eq(&'=').is_some() => {
+                    add_tok(&mut tokens, TokenKind::EqualEqual, &loc)
+                }
+                '/' if chars.next_if_eq(&'=').is_some() => {
+                    add_tok(&mut tokens, TokenKind::SlashEqual, &loc)
+                }
 
-                '<' => tokens.push_back(Token::LeftAngle),
-                '>' => tokens.push_back(Token::RightAngle),
-                '(' => tokens.push_back(Token::LeftParen),
-                ')' => tokens.push_back(Token::RightParen),
-                '[' => tokens.push_back(Token::LeftBracket),
-                ']' => tokens.push_back(Token::RightBracket),
-                '{' => tokens.push_back(Token::LeftBrace),
-                '}' => tokens.push_back(Token::RightBrace),
-                '=' => tokens.push_back(Token::Equal),
-                '+' => tokens.push_back(Token::Plus),
-                '-' => tokens.push_back(Token::Minus),
-                '.' => tokens.push_back(Token::Dot),
-                ',' => tokens.push_back(Token::Comma),
-                '*' => tokens.push_back(Token::Star),
-                '/' => tokens.push_back(Token::Slash),
-                ';' => tokens.push_back(Token::Semicolon),
-                '~' => tokens.push_back(Token::Tilde),
-                '?' => tokens.push_back(Token::Question),
+                '<' => add_tok(&mut tokens, TokenKind::LeftAngle, &loc),
+                '>' => add_tok(&mut tokens, TokenKind::RightAngle, &loc),
+                '(' => add_tok(&mut tokens, TokenKind::LeftParen, &loc),
+                ')' => add_tok(&mut tokens, TokenKind::RightParen, &loc),
+                '[' => add_tok(&mut tokens, TokenKind::LeftBracket, &loc),
+                ']' => add_tok(&mut tokens, TokenKind::RightBracket, &loc),
+                '{' => add_tok(&mut tokens, TokenKind::LeftBrace, &loc),
+                '}' => add_tok(&mut tokens, TokenKind::RightBrace, &loc),
+                '=' => add_tok(&mut tokens, TokenKind::Equal, &loc),
+                '+' => add_tok(&mut tokens, TokenKind::Plus, &loc),
+                '-' => add_tok(&mut tokens, TokenKind::Minus, &loc),
+                '.' => add_tok(&mut tokens, TokenKind::Dot, &loc),
+                ',' => add_tok(&mut tokens, TokenKind::Comma, &loc),
+                '*' => add_tok(&mut tokens, TokenKind::Star, &loc),
+                '/' => add_tok(&mut tokens, TokenKind::Slash, &loc),
+                ';' => add_tok(&mut tokens, TokenKind::Semicolon, &loc),
+                '~' => add_tok(&mut tokens, TokenKind::Tilde, &loc),
+                '?' => add_tok(&mut tokens, TokenKind::Question, &loc),
 
                 '_' | 'a'..='z' | 'A'..='Z' => {
                     buffer.clear();
@@ -194,20 +237,20 @@ impl Lexer {
                         buffer.push(c);
                     }
                     let tok = match buffer.as_str() {
-                        "true" => Token::Literal(Literal::Boolean(true)),
-                        "false" => Token::Literal(Literal::Boolean(false)),
-                        "var" => Token::Var,
-                        "let" => Token::Let,
-                        "set" => Token::Set,
-                        "with" => Token::With,
-                        "new" => Token::New,
-                        "lambda" => Token::Lambda,
-                        "while" => Token::While,
-                        "if" => Token::If,
-                        "else" => Token::Else,
-                        _ => Token::Identifier(buffer.clone()),
+                        "true" => TokenKind::Literal(Literal::Boolean(true)),
+                        "false" => TokenKind::Literal(Literal::Boolean(false)),
+                        "var" => TokenKind::Var,
+                        "let" => TokenKind::Let,
+                        "set" => TokenKind::Set,
+                        "with" => TokenKind::With,
+                        "new" => TokenKind::New,
+                        "lambda" => TokenKind::Lambda,
+                        "while" => TokenKind::While,
+                        "if" => TokenKind::If,
+                        "else" => TokenKind::Else,
+                        _ => TokenKind::Identifier(buffer.clone()),
                     };
-                    tokens.push_back(tok)
+                    add_tok(&mut tokens, tok, &loc)
                 }
                 _ => {
                     buffer.clear();
@@ -219,57 +262,94 @@ impl Lexer {
                 }
             }
         }
-        Ok(Lexer { tokens })
+        Ok(Lexer { tokens, end: loc })
     }
 
     pub fn next_token(&mut self) -> Token {
         match self.tokens.pop_front() {
-            Some(Token::Newline) => self.next_token(),
+            Some(Token {
+                kind: TokenKind::Newline,
+                ..
+            }) => self.next_token(),
             Some(tok) => tok,
-            None => Token::Eof,
+            None => Token {
+                kind: TokenKind::Eof,
+                loc: self.end.clone(),
+            },
         }
     }
 
-    pub fn peek(&self) -> &Token {
+    pub fn peek(&self) -> &TokenKind {
         match self
             .tokens
             .iter()
-            .filter(|x| !matches!(x, Token::Newline))
+            .filter(|x| {
+                !matches!(
+                    x,
+                    Token {
+                        kind: TokenKind::Newline,
+                        ..
+                    }
+                )
+            })
             .next()
         {
-            Some(Token::Newline) => self.peek_over(),
-            Some(tok) => tok,
-            None => &Token::Eof,
+            Some(Token { kind, .. }) => kind,
+            None => &TokenKind::Eof,
         }
     }
 
-    pub fn peek_over(&self) -> &Token {
+    pub fn peek_over(&self) -> &TokenKind {
         match self
             .tokens
             .iter()
-            .filter(|x| !matches!(x, Token::Newline))
+            .filter(|x| {
+                !matches!(
+                    x,
+                    Token {
+                        kind: TokenKind::Newline,
+                        ..
+                    }
+                )
+            })
             .nth(1)
         {
-            Some(tok) => tok,
-            None => &Token::Eof,
+            Some(Token { kind, .. }) => kind,
+            None => &TokenKind::Eof,
         }
     }
 
     // next and convert Newline To Semicolon
     pub fn next_token_nts(&mut self) -> Token {
         match self.tokens.pop_front() {
-            Some(Token::Newline) => Token::Semicolon,
+            Some(Token {
+                kind: TokenKind::Newline,
+                loc,
+            }) => Token {
+                kind: TokenKind::Semicolon,
+                loc,
+            },
             Some(tok) => tok,
-            None => Token::Eof,
+            None => Token {
+                kind: TokenKind::Eof,
+                loc: self.end.clone(),
+            },
         }
     }
 
     // peek anc convert Newline To Semicolon
-    pub fn peek_nts(&self) -> &Token {
+    pub fn peek_nts(&self) -> &TokenKind {
         match self.tokens.front() {
-            Some(Token::Newline) => &Token::Semicolon,
-            Some(tok) => tok,
-            None => &Token::Eof,
+            Some(Token {
+                kind: TokenKind::Newline,
+                ..
+            }) => &TokenKind::Semicolon,
+            Some(Token { kind, .. }) => kind,
+            None => &TokenKind::Eof,
         }
+    }
+
+    pub fn peek_all_tokens(&self) -> impl Iterator<Item = &Token> {
+        self.tokens.iter()
     }
 }

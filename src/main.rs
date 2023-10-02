@@ -21,7 +21,6 @@ fn main() -> io::Result<()> {
 mod tests {
     use crate::interpreter::Interpreter;
     use crate::lexer::Lexer;
-    use crate::lexer::Token;
     use crate::parser::Parser;
     use crate::repl;
 
@@ -43,23 +42,13 @@ mod tests {
     print(y(-10));
     "#;
 
-    impl Lexer {
-        pub fn get_all_tokens(&mut self) -> Vec<Token> {
-            let mut tokens: Vec<Token> = Default::default();
-            loop {
-                match self.next_token() {
-                    Token::Eof => break,
-                    token => tokens.push(token),
-                }
-            }
-            tokens
-        }
-    }
-
     #[test]
     fn lexer() {
-        let mut lexer = Lexer::lex(PROGRAM).unwrap();
-        println!("--- Tokens ---\n{:?}", lexer.get_all_tokens());
+        let lexer = Lexer::lex(PROGRAM).unwrap();
+        println!(
+            "--- Tokens ---\n{:?}",
+            lexer.peek_all_tokens().collect::<Vec<_>>()
+        );
     }
 
     #[test]
