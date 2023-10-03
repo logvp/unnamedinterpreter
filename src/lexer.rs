@@ -162,10 +162,10 @@ impl Lexer {
                         Err(_) => return Err(LexerError::BadBinLiteral(buffer, loc)),
                     }
                 }
-                _ if c.is_digit(10) => {
+                '0'..='9' => {
                     buffer.clear();
                     buffer.push(c);
-                    while let Some(digit) = chars.next_if(|d| d.is_digit(10)) {
+                    while let Some(digit) = chars.next_if(|d| d.is_ascii_digit()) {
                         buffer.push(digit);
                     }
                     add_tok(
@@ -280,20 +280,15 @@ impl Lexer {
     }
 
     pub fn peek(&self) -> &TokenKind {
-        match self
-            .tokens
-            .iter()
-            .filter(|x| {
-                !matches!(
-                    x,
-                    Token {
-                        kind: TokenKind::Newline,
-                        ..
-                    }
-                )
-            })
-            .next()
-        {
+        match self.tokens.iter().find(|x| {
+            !matches!(
+                x,
+                Token {
+                    kind: TokenKind::Newline,
+                    ..
+                }
+            )
+        }) {
             Some(Token { kind, .. }) => kind,
             None => &TokenKind::Eof,
         }
@@ -334,18 +329,6 @@ impl Lexer {
                 kind: TokenKind::Eof,
                 loc: self.end.clone(),
             },
-        }
-    }
-
-    // peek anc convert Newline To Semicolon
-    pub fn peek_nts(&self) -> &TokenKind {
-        match self.tokens.front() {
-            Some(Token {
-                kind: TokenKind::Newline,
-                ..
-            }) => &TokenKind::Semicolon,
-            Some(Token { kind, .. }) => kind,
-            None => &TokenKind::Eof,
         }
     }
 

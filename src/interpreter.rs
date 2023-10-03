@@ -10,7 +10,7 @@ use crate::parser::Parser;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Object(Rc<Context>),
+    Object(Object),
     Function(Rc<Function>),
     Integer(i32),
     String(String),
@@ -150,6 +150,9 @@ impl RuntimeValue {
 // Wrapper to allow Function to be exposed in RuntimeValue but FunctionType implementation to remain private
 #[derive(Debug)]
 pub struct Function(FunctionType);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Object(Rc<Context>);
 
 #[derive(Debug)]
 enum FunctionType {
@@ -420,7 +423,7 @@ impl Eval for Expression {
             }
             Self::With(with, body) => {
                 let arg = with.eval(ctx)?;
-                if let RuntimeValue::Object(obj_ctx) = arg {
+                if let RuntimeValue::Object(Object(obj_ctx)) = arg {
                     body.eval_with_context(&obj_ctx)?
                 } else {
                     Err(RuntimeError::ExpectedButFound(
@@ -432,7 +435,7 @@ impl Eval for Expression {
             Self::New(block) => {
                 let ctx = Rc::new(Context::new(ctx));
                 block.eval_with_context(&ctx)?;
-                RuntimeValue::Object(ctx)
+                RuntimeValue::Object(Object(ctx))
             }
             Self::Term(term) => term.eval(ctx)?,
         })
