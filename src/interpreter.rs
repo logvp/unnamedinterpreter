@@ -58,46 +58,17 @@ impl Display for RuntimeValue {
 }
 impl PartialEq for RuntimeValue {
     fn eq(&self, other: &Self) -> bool {
-        match self {
-            Self::Integer(a) => {
-                if let Self::Integer(b) = other {
-                    *a == *b
-                } else {
-                    false
-                }
-            }
-            Self::String(a) => {
-                if let Self::String(b) = other {
-                    *a == *b
-                } else {
-                    false
-                }
-            }
-            Self::Boolean(a) => {
-                if let Self::Boolean(b) = other {
-                    *a == *b
-                } else {
-                    false
-                }
-            }
-            Self::Object(a) => {
-                if let Self::Object(b) = other {
-                    a == b
-                } else {
-                    false
-                }
-            }
-            Self::Function(a) => {
+        match (self, other) {
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::Object(a), Self::Object(b)) => a == b,
+            (Self::Function(a), Self::Function(b)) => {
                 // Two functions are equal iff they are aliases of each other
-                if let Self::Function(b) = other {
-                    Rc::ptr_eq(a, b)
-                } else {
-                    false
-                }
+                Rc::ptr_eq(a, b)
             }
-            Self::None => {
-                matches!(other, Self::None)
-            }
+            (Self::None, Self::None) => true,
+            _ => false,
         }
     }
 }
@@ -138,7 +109,7 @@ impl RuntimeValue {
     fn get_type(&self) -> RuntimeType {
         match self {
             Self::Object(_) => RuntimeType::Object,
-            Self::Function { .. } => RuntimeType::Function,
+            Self::Function(_) => RuntimeType::Function,
             Self::Integer(_) => RuntimeType::Integer,
             Self::String(_) => RuntimeType::String,
             Self::Boolean(_) => RuntimeType::Boolean,
@@ -280,11 +251,10 @@ impl Context {
     }
 
     fn declare(&self, key: String, val: RuntimeValue, is_const: bool) {
-        self.data
-            .borrow_mut()
-            .insert(key, Variable { val, is_const })
-            .ok_or(())
-            .expect_err("Cannot redeclare variable in same scope");
+        let None = self.data.borrow_mut().insert(key, Variable { val, is_const })
+        else {
+            panic!("Cannot redeclare variable in same scope")
+        };
     }
 
     fn update(&self, key: String, val: RuntimeValue) -> Result<(), RuntimeError> {
@@ -292,13 +262,11 @@ impl Context {
             if self.is_const(&key).unwrap() {
                 Err(RuntimeError::ConstReassignment(key))
             } else {
-                self.data.borrow_mut().insert(
-                    key,
-                    Variable {
-                        val,
-                        is_const: false,
-                    },
-                );
+                let var = Variable {
+                    val,
+                    is_const: false,
+                };
+                self.data.borrow_mut().insert(key, var);
                 Ok(())
             }
         } else if let Some(parent) = &self.parent {
@@ -309,13 +277,11 @@ impl Context {
     }
 
     fn get(&self, key: &String) -> Option<Variable> {
-        self.data.borrow().get(key).cloned().or_else(|| {
-            if let Some(parent) = &self.parent {
-                parent.get(key)
-            } else {
-                None
-            }
-        })
+        self.data
+            .borrow()
+            .get(key)
+            .cloned()
+            .or(self.parent.as_ref().and_then(|p| p.get(key)))
     }
 
     fn new(parent: Rc<Self>) -> Self {
@@ -424,7 +390,7 @@ impl Eval for Expression {
             Self::With(with, body) => {
                 let arg = with.eval(ctx)?;
                 if let RuntimeValue::Object(Object(obj_ctx)) = arg {
-                    body.eval_with_context(&obj_ctx)?
+                    body.eval_with_context(obj_ctx)?
                 } else {
                     Err(RuntimeError::ExpectedButFound(
                         RuntimeType::Object,
@@ -434,7 +400,7 @@ impl Eval for Expression {
             }
             Self::New(block) => {
                 let ctx = Rc::new(Context::new(ctx));
-                block.eval_with_context(&ctx)?;
+                block.eval_with_context(ctx.clone())?;
                 RuntimeValue::Object(Object(ctx))
             }
             Self::Term(term) => term.eval(ctx)?,
@@ -538,11 +504,11 @@ impl Eval for Factor {
 impl Eval for Block {
     fn eval(&self, parent: Rc<Context>) -> Result<RuntimeValue, Error> {
         let ctx = Rc::new(Context::new(parent));
-        self.eval_with_context(&ctx)
+        self.eval_with_context(ctx)
     }
 }
 impl Block {
-    fn eval_with_context(&self, ctx: &Rc<Context>) -> Result<RuntimeValue, Error> {
+    fn eval_with_context(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         let Self(vec) = self;
         let mut ret = RuntimeValue::None;
         for node in vec {
