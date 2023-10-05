@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Display, rc::Rc};
+use std::{collections::VecDeque, fmt::Display, iter::Peekable, rc::Rc};
 
 pub use crate::ast::Literal;
 use crate::error::{LexerError, Loc};
@@ -120,10 +120,9 @@ impl Lexer {
             })
         }
         while let Some(c) = chars.next() {
+            loc.inc(c);
             match c {
                 '\n' => {
-                    loc.line += 1;
-                    loc.col = 0;
                     // consecutive newlines are not needed
                     if !matches!(
                         tokens.back(),
@@ -135,9 +134,7 @@ impl Lexer {
                         add_tok(&mut tokens, TokenKind::Newline, &loc)
                     }
                 }
-                _ if c.is_whitespace() => {
-                    loc.col += 1;
-                }
+                _ if c.is_whitespace() => {}
                 '0' if chars.next_if_eq(&'x').is_some() => {
                     buffer.clear();
                     while let Some(digit) = chars.next_if(|d| d.is_alphanumeric()) {
@@ -173,6 +170,29 @@ impl Lexer {
                         TokenKind::Literal(Literal::Integer(buffer.parse().unwrap())),
                         &loc,
                     )
+                }
+                '-' if chars.next_if_eq(&'-').is_some() => {
+                    // chomp until the end of the line
+                    while let Some(_) = chars.next_if(|&x| x != '\n') {}
+                }
+                '{' if chars.next_if_eq(&'-').is_some() => {
+                    fn chomp_comment(
+                        chars: &mut Peekable<impl Iterator<Item = char>>,
+                        start_loc: Loc,
+                    ) -> Result<Loc, LexerError> {
+                        let mut loc = start_loc.clone();
+                        while let Some(c) = chars.next() {
+                            match c {
+                                '{' if chars.next_if_eq(&'-').is_some() => {
+                                    loc = chomp_comment(chars, loc)?;
+                                }
+                                '-' if chars.next_if_eq(&'}').is_some() => return Ok(loc),
+                                _ => loc.inc(c),
+                            }
+                        }
+                        return Err(LexerError::UnmatchedMultilineComment(start_loc));
+                    }
+                    loc = chomp_comment(&mut chars, loc)?
                 }
                 '"' => {
                     buffer.clear();

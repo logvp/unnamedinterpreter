@@ -27,6 +27,18 @@ impl Loc {
             filename,
         }
     }
+
+    pub fn inc(&mut self, ch: char) {
+        match ch {
+            '\n' => {
+                self.line += 1;
+                self.col = 1;
+            }
+            _ => {
+                self.col += 1;
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -64,6 +76,7 @@ impl Display for Error {
 pub enum LexerError {
     UnknownToken(String, Loc),
     UnterminatedStringLiteral(String, Loc),
+    UnmatchedMultilineComment(Loc),
     BadHexLiteral(String, Loc),
     BadBinLiteral(String, Loc),
 }
@@ -90,6 +103,9 @@ impl Display for LexerError {
             Self::UnknownToken(tok, loc) => write!(f, "Unknown token {} at {}", tok, loc),
             Self::UnterminatedStringLiteral(string, loc) => {
                 write!(f, "Unterminated string literal \"{}\" at {}", string, loc)
+            }
+            Self::UnmatchedMultilineComment(loc) => {
+                write!(f, "Unmatched multiline comment beginning at {}", loc)
             }
             Self::BadHexLiteral(string, loc) => {
                 write!(f, "Invalid hex literal \"0x{}\" at {}", string, loc)
