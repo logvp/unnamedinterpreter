@@ -113,6 +113,34 @@ impl Lexer {
         let mut tokens: VecDeque<Token> = VecDeque::new();
         let mut buffer = String::new();
         let mut loc = Loc::new(filename);
+        fn build_buffer_while(
+            buffer: &mut String,
+            loc: &mut Loc,
+            initial: Option<char>,
+            chars: &mut Peekable<impl Iterator<Item = char>>,
+            func: fn(&char) -> bool,
+        ) {
+            buffer.clear();
+            if let Some(c) = initial {
+                buffer.push(c);
+            }
+            while let Some(c) = chars.next_if(func) {
+                loc.inc(c);
+                buffer.push(c);
+            }
+        }
+        fn next_if_eq(
+            chars: &mut Peekable<impl Iterator<Item = char>>,
+            ch: char,
+            loc: &mut Loc,
+        ) -> bool {
+            if let Some(c) = chars.next_if_eq(&ch) {
+                loc.inc(c);
+                true
+            } else {
+                false
+            }
+        }
         fn add_tok(tokens: &mut VecDeque<Token>, kind: TokenKind, loc: &Loc) {
             tokens.push_back(Token {
                 kind,
@@ -135,11 +163,10 @@ impl Lexer {
                     }
                 }
                 _ if c.is_whitespace() => {}
-                '0' if chars.next_if_eq(&'x').is_some() => {
-                    buffer.clear();
-                    while let Some(digit) = chars.next_if(|d| d.is_alphanumeric()) {
-                        buffer.push(digit);
-                    }
+                '0' if next_if_eq(&mut chars, 'x', &mut loc) => {
+                    build_buffer_while(&mut buffer, &mut loc, None, &mut chars, |d| {
+                        d.is_alphanumeric()
+                    });
                     match i32::from_str_radix(&buffer, 0x10) {
                         Ok(int) => {
                             add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
@@ -147,11 +174,10 @@ impl Lexer {
                         Err(_) => return Err(LexerError::BadHexLiteral(buffer, loc)),
                     }
                 }
-                '0' if chars.next_if_eq(&'b').is_some() => {
-                    buffer.clear();
-                    while let Some(digit) = chars.next_if(|d| d.is_alphanumeric()) {
-                        buffer.push(digit);
-                    }
+                '0' if next_if_eq(&mut chars, 'b', &mut loc) => {
+                    build_buffer_while(&mut buffer, &mut loc, None, &mut chars, |d| {
+                        d.is_alphanumeric()
+                    });
                     match i32::from_str_radix(&buffer, 0b10) {
                         Ok(int) => {
                             add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
@@ -160,33 +186,31 @@ impl Lexer {
                     }
                 }
                 '0'..='9' => {
-                    buffer.clear();
-                    buffer.push(c);
-                    while let Some(digit) = chars.next_if(|d| d.is_ascii_digit()) {
-                        buffer.push(digit);
-                    }
+                    build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |d| {
+                        d.is_ascii_digit()
+                    });
                     add_tok(
                         &mut tokens,
                         TokenKind::Literal(Literal::Integer(buffer.parse().unwrap())),
                         &loc,
                     )
                 }
-                '-' if chars.next_if_eq(&'-').is_some() => {
+                '-' if next_if_eq(&mut chars, '-', &mut loc) => {
                     // chomp until the end of the line
                     while let Some(_) = chars.next_if(|&x| x != '\n') {}
                 }
-                '{' if chars.next_if_eq(&'-').is_some() => {
+                '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                     fn chomp_comment(
-                        chars: &mut Peekable<impl Iterator<Item = char>>,
+                        mut chars: &mut Peekable<impl Iterator<Item = char>>,
                         start_loc: Loc,
                     ) -> Result<Loc, LexerError> {
                         let mut loc = start_loc.clone();
                         while let Some(c) = chars.next() {
                             match c {
-                                '{' if chars.next_if_eq(&'-').is_some() => {
+                                '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                                     loc = chomp_comment(chars, loc)?;
                                 }
-                                '-' if chars.next_if_eq(&'}').is_some() => return Ok(loc),
+                                '-' if next_if_eq(&mut chars, '}', &mut loc) => return Ok(loc),
                                 _ => loc.inc(c),
                             }
                         }
@@ -195,12 +219,9 @@ impl Lexer {
                     loc = chomp_comment(&mut chars, loc)?
                 }
                 '"' => {
-                    buffer.clear();
-                    while let Some(c) = chars.next_if(|&c| c != '"') {
-                        // escape sequences
-                        buffer.push(c);
-                    }
-                    if let Some('"') = chars.next() {
+                    build_buffer_while(&mut buffer, &mut loc, None, &mut chars, |&c| c != '"');
+                    if let Some(c @ '"') = chars.next() {
+                        loc.inc(c);
                         add_tok(
                             &mut tokens,
                             TokenKind::Literal(Literal::String(buffer.clone())),
@@ -210,22 +231,22 @@ impl Lexer {
                         return Err(LexerError::UnterminatedStringLiteral(buffer, loc));
                     }
                 }
-                '<' if chars.next_if_eq(&'=').is_some() => {
+                '<' if next_if_eq(&mut chars, '=', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::LessEqual, &loc)
                 }
-                '>' if chars.next_if_eq(&'=').is_some() => {
+                '>' if next_if_eq(&mut chars, '=', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::GreaterEqual, &loc)
                 }
-                '+' if chars.next_if_eq(&'+').is_some() => {
+                '+' if next_if_eq(&mut chars, '+', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::PlusPlus, &loc)
                 }
-                ':' if chars.next_if_eq(&'=').is_some() => {
+                ':' if next_if_eq(&mut chars, '=', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::ColonEqual, &loc)
                 }
-                '=' if chars.next_if_eq(&'=').is_some() => {
+                '=' if next_if_eq(&mut chars, '=', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::EqualEqual, &loc)
                 }
-                '/' if chars.next_if_eq(&'=').is_some() => {
+                '/' if next_if_eq(&mut chars, '=', &mut loc) => {
                     add_tok(&mut tokens, TokenKind::SlashEqual, &loc)
                 }
 
@@ -249,13 +270,13 @@ impl Lexer {
                 '?' => add_tok(&mut tokens, TokenKind::Question, &loc),
 
                 '_' | 'a'..='z' | 'A'..='Z' => {
-                    buffer.clear();
-                    buffer.push(c);
-                    while let Some(c) =
-                        chars.next_if(|c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'))
-                    {
-                        buffer.push(c);
-                    }
+                    build_buffer_while(
+                        &mut buffer,
+                        &mut loc,
+                        Some(c),
+                        &mut chars,
+                        |c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'),
+                    );
                     let tok = match buffer.as_str() {
                         "true" => TokenKind::Literal(Literal::Boolean(true)),
                         "false" => TokenKind::Literal(Literal::Boolean(false)),
@@ -273,11 +294,9 @@ impl Lexer {
                     add_tok(&mut tokens, tok, &loc)
                 }
                 _ => {
-                    buffer.clear();
-                    buffer.push(c);
-                    while let Some(c) = chars.next_if(|c| !c.is_whitespace()) {
-                        buffer.push(c);
-                    }
+                    build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |c| {
+                        !c.is_whitespace()
+                    });
                     return Err(LexerError::UnknownToken(buffer, loc));
                 }
             }

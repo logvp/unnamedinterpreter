@@ -1,14 +1,14 @@
 let person = lambda (name, age) {
     new {
-        "instance data";
+        -- instance data
         let name = name;
         var age = age;
-        "method to execute";
+        -- method
         let greet = lambda () { print("Hello! My name is", name, "and I am", age, "years old!"); };
     }
 };
 
-"Using the `with` keyword to bring instance data into scope";
+-- Using the `with` keyword to bring instance data into scope
 let john = person("John", 30);
 with (john) {
     greet();
@@ -17,7 +17,7 @@ with (john) {
     print("Happy birthday", name, "!");
 };
 
-"Using functions to wrap the `with` block";
+-- Using functions to wrap the `with` block
 let peter = person("Peter", 20);
 let greet = lambda (person) {
     with (person) { greet(); };
@@ -30,10 +30,10 @@ greet(peter);
 get_older(peter);
 greet(peter);
 
-"Duck-typed polymorphism";
+-- Duck-typed polymorphism
 let dog = new {
     let greet = lambda () { print("Who's a good boy!"); };
 };
 
 greet(dog);
-"get_older(dog);  would cause an error because dog does not have an age variable";
+{- get_older(dog); -} -- would cause an error because dog does not have an age variable
