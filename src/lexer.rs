@@ -149,28 +149,26 @@ impl Lexer {
         }
         while let Some(c) = chars.next() {
             loc.inc(c);
-            match c {
+            let token = match c {
                 '\n' => {
                     // consecutive newlines are not needed
-                    if !matches!(
-                        tokens.back(),
-                        Some(Token {
-                            kind: TokenKind::Newline,
-                            ..
-                        })
-                    ) {
-                        add_tok(&mut tokens, TokenKind::Newline, &loc)
+                    if let Some(Token {
+                        kind: TokenKind::Newline,
+                        loc: _,
+                    }) = tokens.back()
+                    {
+                        continue;
+                    } else {
+                        TokenKind::Newline
                     }
                 }
-                _ if c.is_whitespace() => {}
+                _ if c.is_whitespace() => continue,
                 '0' if next_if_eq(&mut chars, 'x', &mut loc) => {
                     build_buffer_while(&mut buffer, &mut loc, None, &mut chars, |d| {
                         d.is_alphanumeric()
                     });
                     match i32::from_str_radix(&buffer, 0x10) {
-                        Ok(int) => {
-                            add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
-                        }
+                        Ok(int) => TokenKind::Literal(Literal::Integer(int)),
                         Err(_) => return Err(LexerError::BadHexLiteral(buffer, loc)),
                     }
                 }
@@ -179,9 +177,7 @@ impl Lexer {
                         d.is_alphanumeric()
                     });
                     match i32::from_str_radix(&buffer, 0b10) {
-                        Ok(int) => {
-                            add_tok(&mut tokens, TokenKind::Literal(Literal::Integer(int)), &loc)
-                        }
+                        Ok(int) => TokenKind::Literal(Literal::Integer(int)),
                         Err(_) => return Err(LexerError::BadBinLiteral(buffer, loc)),
                     }
                 }
@@ -189,15 +185,13 @@ impl Lexer {
                     build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |d| {
                         d.is_ascii_digit()
                     });
-                    add_tok(
-                        &mut tokens,
-                        TokenKind::Literal(Literal::Integer(buffer.parse().unwrap())),
-                        &loc,
-                    )
+
+                    TokenKind::Literal(Literal::Integer(buffer.parse().unwrap()))
                 }
                 '-' if next_if_eq(&mut chars, '-', &mut loc) => {
                     // chomp until the end of the line
                     while let Some(_) = chars.next_if(|&x| x != '\n') {}
+                    continue;
                 }
                 '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                     fn chomp_comment(
@@ -216,7 +210,8 @@ impl Lexer {
                         }
                         return Err(LexerError::UnmatchedMultilineComment(start_loc));
                     }
-                    loc = chomp_comment(&mut chars, loc)?
+                    loc = chomp_comment(&mut chars, loc)?;
+                    continue;
                 }
                 '"' => {
                     buffer.clear();
@@ -241,52 +236,37 @@ impl Lexer {
                     }
                     if let Some(c @ '"') = chars.next() {
                         loc.inc(c);
-                        add_tok(
-                            &mut tokens,
-                            TokenKind::Literal(Literal::String(buffer.clone())),
-                            &loc,
-                        )
+
+                        TokenKind::Literal(Literal::String(buffer.clone()))
                     } else {
                         return Err(LexerError::UnterminatedStringLiteral(buffer, loc));
                     }
                 }
-                '<' if next_if_eq(&mut chars, '=', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::LessEqual, &loc)
-                }
-                '>' if next_if_eq(&mut chars, '=', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::GreaterEqual, &loc)
-                }
-                '+' if next_if_eq(&mut chars, '+', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::PlusPlus, &loc)
-                }
-                ':' if next_if_eq(&mut chars, '=', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::ColonEqual, &loc)
-                }
-                '=' if next_if_eq(&mut chars, '=', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::EqualEqual, &loc)
-                }
-                '/' if next_if_eq(&mut chars, '=', &mut loc) => {
-                    add_tok(&mut tokens, TokenKind::SlashEqual, &loc)
-                }
+                '<' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::LessEqual,
+                '>' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::GreaterEqual,
+                '+' if next_if_eq(&mut chars, '+', &mut loc) => TokenKind::PlusPlus,
+                ':' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::ColonEqual,
+                '=' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::EqualEqual,
+                '/' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::SlashEqual,
 
-                '<' => add_tok(&mut tokens, TokenKind::LeftAngle, &loc),
-                '>' => add_tok(&mut tokens, TokenKind::RightAngle, &loc),
-                '(' => add_tok(&mut tokens, TokenKind::LeftParen, &loc),
-                ')' => add_tok(&mut tokens, TokenKind::RightParen, &loc),
-                '[' => add_tok(&mut tokens, TokenKind::LeftBracket, &loc),
-                ']' => add_tok(&mut tokens, TokenKind::RightBracket, &loc),
-                '{' => add_tok(&mut tokens, TokenKind::LeftBrace, &loc),
-                '}' => add_tok(&mut tokens, TokenKind::RightBrace, &loc),
-                '=' => add_tok(&mut tokens, TokenKind::Equal, &loc),
-                '+' => add_tok(&mut tokens, TokenKind::Plus, &loc),
-                '-' => add_tok(&mut tokens, TokenKind::Minus, &loc),
-                '.' => add_tok(&mut tokens, TokenKind::Dot, &loc),
-                ',' => add_tok(&mut tokens, TokenKind::Comma, &loc),
-                '*' => add_tok(&mut tokens, TokenKind::Star, &loc),
-                '/' => add_tok(&mut tokens, TokenKind::Slash, &loc),
-                ';' => add_tok(&mut tokens, TokenKind::Semicolon, &loc),
-                '~' => add_tok(&mut tokens, TokenKind::Tilde, &loc),
-                '?' => add_tok(&mut tokens, TokenKind::Question, &loc),
+                '<' => TokenKind::LeftAngle,
+                '>' => TokenKind::RightAngle,
+                '(' => TokenKind::LeftParen,
+                ')' => TokenKind::RightParen,
+                '[' => TokenKind::LeftBracket,
+                ']' => TokenKind::RightBracket,
+                '{' => TokenKind::LeftBrace,
+                '}' => TokenKind::RightBrace,
+                '=' => TokenKind::Equal,
+                '+' => TokenKind::Plus,
+                '-' => TokenKind::Minus,
+                '.' => TokenKind::Dot,
+                ',' => TokenKind::Comma,
+                '*' => TokenKind::Star,
+                '/' => TokenKind::Slash,
+                ';' => TokenKind::Semicolon,
+                '~' => TokenKind::Tilde,
+                '?' => TokenKind::Question,
 
                 '_' | 'a'..='z' | 'A'..='Z' => {
                     build_buffer_while(
@@ -310,7 +290,7 @@ impl Lexer {
                         "else" => TokenKind::Else,
                         _ => TokenKind::Identifier(buffer.clone()),
                     };
-                    add_tok(&mut tokens, tok, &loc)
+                    tok
                 }
                 _ => {
                     build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |c| {
@@ -318,7 +298,8 @@ impl Lexer {
                     });
                     return Err(LexerError::UnknownToken(buffer, loc));
                 }
-            }
+            };
+            add_tok(&mut tokens, token, &loc)
         }
         Ok(Lexer { tokens, end: loc })
     }
