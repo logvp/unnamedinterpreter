@@ -77,6 +77,7 @@ pub enum LexerError {
     UnknownToken(String, Loc),
     UnterminatedStringLiteral(String, Loc),
     UnmatchedMultilineComment(Loc),
+    InvalidEscape(char, Loc),
     BadHexLiteral(String, Loc),
     BadBinLiteral(String, Loc),
 }
@@ -106,6 +107,9 @@ impl Display for LexerError {
             }
             Self::UnmatchedMultilineComment(loc) => {
                 write!(f, "Unmatched multiline comment beginning at {}", loc)
+            }
+            Self::InvalidEscape(ch, loc) => {
+                write!(f, "Invalid string escape sequence {:?} at {}", ch, loc)
             }
             Self::BadHexLiteral(string, loc) => {
                 write!(f, "Invalid hex literal \"0x{}\" at {}", string, loc)

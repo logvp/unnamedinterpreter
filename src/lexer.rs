@@ -219,7 +219,26 @@ impl Lexer {
                     loc = chomp_comment(&mut chars, loc)?
                 }
                 '"' => {
-                    build_buffer_while(&mut buffer, &mut loc, None, &mut chars, |&c| c != '"');
+                    buffer.clear();
+                    while let Some(c) = chars.next_if(|&c| c != '"') {
+                        loc.inc(c);
+                        match c {
+                            '\\' => {
+                                if let Some(c) = chars.next() {
+                                    loc.inc(c);
+                                    match c {
+                                        'n' => buffer.push('\n'),
+                                        'r' => buffer.push('\r'),
+                                        't' => buffer.push('\t'),
+                                        '"' => buffer.push('"'),
+                                        '\\' => buffer.push('\\'),
+                                        _ => return Err(LexerError::InvalidEscape(c, loc)),
+                                    }
+                                }
+                            }
+                            _ => buffer.push(c),
+                        }
+                    }
                     if let Some(c @ '"') = chars.next() {
                         loc.inc(c);
                         add_tok(
