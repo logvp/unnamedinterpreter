@@ -145,7 +145,7 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         Ok(true)
     }
 
-    fn print_results(output: &mut O, result: &Vec<Result<RuntimeValue, Error>>) -> io::Result<()> {
+    fn print_results(output: &mut O, result: &[Result<RuntimeValue, Error>]) -> io::Result<()> {
         for ret in result {
             match ret {
                 Ok(RuntimeValue::None) => (),

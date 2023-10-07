@@ -142,7 +142,7 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> Option<&String> {
+    pub fn name(&self) -> Option<&str> {
         match self {
             Self::Identifier(ident) => Some(&ident.name),
             // _ => None,

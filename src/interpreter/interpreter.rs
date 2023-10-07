@@ -86,7 +86,7 @@ impl RuntimeValue {
         }
     }
 
-    fn string(&self) -> Result<&String, RuntimeError> {
+    fn string(&self) -> Result<&str, RuntimeError> {
         if let Self::String(string) = self {
             Ok(string)
         } else {
@@ -212,7 +212,7 @@ impl Context {
         global
     }
 
-    fn is_const(&self, key: &String) -> Option<bool> {
+    fn is_const(&self, key: &str) -> Option<bool> {
         if self.data.borrow().contains_key(key) {
             Some(self.data.borrow().get(key).unwrap().is_const)
         } else if let Some(parent) = &self.parent {
@@ -222,7 +222,7 @@ impl Context {
         }
     }
 
-    fn contains(&self, key: &String) -> bool {
+    fn contains(&self, key: &str) -> bool {
         if self.data.borrow().contains_key(key) {
             true
         } else if let Some(parent) = &self.parent {
@@ -232,7 +232,7 @@ impl Context {
         }
     }
 
-    fn contains_in_scope(&self, key: &String) -> bool {
+    fn contains_in_scope(&self, key: &str) -> bool {
         self.data.borrow().contains_key(key)
     }
 
@@ -262,7 +262,7 @@ impl Context {
         }
     }
 
-    fn get(&self, key: &String) -> Option<Variable> {
+    fn get(&self, key: &str) -> Option<Variable> {
         self.data
             .borrow()
             .get(key)
@@ -327,9 +327,11 @@ impl Eval for Statement {
             Self::Assignment(lhs, rhs) => {
                 if ctx.contains(lhs.name().unwrap()) {
                     let value = rhs.eval(ctx.clone())?;
-                    ctx.update(lhs.name().unwrap().clone(), value)?;
+                    ctx.update(lhs.name().unwrap().to_owned(), value)?;
                 } else {
-                    Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap().clone()))?
+                    Err(RuntimeError::UnknownIdentifier(
+                        lhs.name().unwrap().to_owned(),
+                    ))?
                 }
             }
             Self::Expression(expr) => {
