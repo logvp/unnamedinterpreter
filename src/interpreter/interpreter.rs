@@ -8,10 +8,12 @@ use crate::ast::*;
 use crate::error::{Error, RuntimeError};
 use crate::parser::Parser;
 
+use super::instrinsics::IntrinsicFunction;
+
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
     Object(Object),
-    Function(Rc<Function>),
+    Function(Rc<FunctionType>),
     Integer(i32),
     String(String),
     Boolean(bool),
@@ -106,7 +108,7 @@ impl RuntimeValue {
         }
     }
 
-    fn get_type(&self) -> RuntimeType {
+    pub(super) fn get_type(&self) -> RuntimeType {
         match self {
             Self::Object(_) => RuntimeType::Object,
             Self::Function(_) => RuntimeType::Function,
@@ -118,30 +120,20 @@ impl RuntimeValue {
     }
 }
 
-// Wrapper to allow Function to be exposed in RuntimeValue but FunctionType implementation to remain private
 #[derive(Debug)]
-pub struct Function(FunctionType);
+pub enum FunctionType {
+    Lambda(Lambda),
+    Intrinsic(IntrinsicFunction),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Object(Rc<Context>);
 
 #[derive(Debug)]
-enum FunctionType {
-    Lambda {
-        parent_scope: Rc<Context>,
-        parameters: Vec<Identifier>,
-        body: Block,
-    },
-    Intrinsic {
-        kind: IntrinsicFunction,
-    },
-}
-
-#[derive(Debug)]
-enum IntrinsicFunction {
-    Print,
-    TypeOf,
-    Debug,
+pub struct Lambda {
+    parent_scope: Rc<Context>,
+    parameters: Vec<Identifier>,
+    body: Block,
 }
 
 pub struct Interpreter {
@@ -203,23 +195,17 @@ impl Context {
         };
         global.declare(
             "print".to_string(),
-            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
-                kind: IntrinsicFunction::Print,
-            }))),
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Print))),
             true,
         );
         global.declare(
             "typeof".to_string(),
-            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
-                kind: IntrinsicFunction::TypeOf,
-            }))),
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::TypeOf))),
             true,
         );
         global.declare(
             "debug".to_string(),
-            RuntimeValue::Function(Rc::new(Function(FunctionType::Intrinsic {
-                kind: IntrinsicFunction::Debug,
-            }))),
+            RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Debug))),
             true,
         );
 
@@ -435,69 +421,50 @@ impl Eval for Factor {
             Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx)?.int()?)),
             Self::Variable(identifier) => identifier.eval(ctx),
             Self::Block(block) => block.eval(ctx),
-            Self::Lambda(param, body) => Ok(RuntimeValue::Function(Rc::new(Function(
-                FunctionType::Lambda {
+            Self::Lambda(param, body) => Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda(
+                Lambda {
                     parent_scope: ctx,
                     parameters: param.to_owned(),
                     body: body.to_owned(),
                 },
             )))),
-            Self::FunctionCall(fun, args) => match fun.eval(ctx.clone())? {
-                RuntimeValue::Function(f) => {
-                    let Function(function) = f.borrow();
-                    match function {
-                        FunctionType::Lambda {
-                            parent_scope,
-                            parameters,
-                            body,
-                        } => {
-                            let scope = Context::new(parent_scope.clone());
-                            if parameters.len() != args.len() {
-                                Err(RuntimeError::ExpectedArgumentsFound(
-                                    parameters.len(),
-                                    args.len(),
-                                ))?
-                            }
-                            // Bind arguments to parameter names
-                            for (ident, val) in parameters.iter().zip(args.iter()) {
-                                scope.declare(ident.name.to_owned(), val.eval(ctx.clone())?, false);
-                            }
-
-                            body.eval(Rc::new(scope))
-                        }
-                        FunctionType::Intrinsic { kind } => match kind {
-                            IntrinsicFunction::Print => {
-                                for arg in args {
-                                    print!("{} ", arg.eval(ctx.clone())?)
-                                }
-                                println!();
-                                Ok(RuntimeValue::None)
-                            }
-                            IntrinsicFunction::TypeOf => {
-                                if args.len() != 1 {
-                                    Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
-                                } else {
-                                    Ok(RuntimeValue::String(format!(
-                                        "{}",
-                                        args[0].eval(ctx)?.get_type()
-                                    )))
-                                }
-                            }
-                            IntrinsicFunction::Debug => {
-                                for arg in args {
-                                    print!("{:?} ", arg.eval(ctx.clone())?)
-                                }
-                                println!();
-                                Ok(RuntimeValue::None)
-                            }
-                        },
-                    }
-                }
-                x => {
-                    Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into())
-                }
-            },
+            Self::FunctionCall(fun, args) => do_function_call(
+                fun.eval(ctx.clone())?,
+                args.iter()
+                    .map(|x| x.eval(ctx.clone()))
+                    .collect::<Result<Vec<RuntimeValue>, _>>()?,
+            ),
         }
+    }
+}
+
+fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<RuntimeValue, Error> {
+    match fun {
+        RuntimeValue::Function(f) => {
+            match f.borrow() {
+                FunctionType::Lambda(Lambda {
+                    parent_scope,
+                    parameters,
+                    body,
+                }) => {
+                    let scope = Context::new(parent_scope.clone());
+                    if parameters.len() != args.len() {
+                        Err(RuntimeError::ExpectedArgumentsFound(
+                            parameters.len(),
+                            args.len(),
+                        ))?
+                    }
+                    // Bind arguments to parameter names
+                    for (ident, val) in parameters.iter().zip(args.into_iter()) {
+                        scope.declare(ident.name.to_owned(), val, false);
+                    }
+
+                    body.eval(Rc::new(scope))
+                }
+                FunctionType::Intrinsic(f) => f.call(args),
+            }
+        }
+        x => Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into()),
     }
 }
 
