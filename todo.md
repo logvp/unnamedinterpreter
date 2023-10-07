@@ -23,7 +23,7 @@
 - [ ] Arrays
 - [ ] User defined types
 - [ ] Early return
-- [ ] Comments
+- [x] Comments
 - [ ] Negation operator
 - [ ] Question "not null" operator
 - [ ] Named arguments
@@ -37,10 +37,11 @@
 - [x] else if
 - [ ] Better error reporting
   - [x] Enumerated error types
-  - [ ] Location + snippet
+  - [x] Location
+  - [ ] Snippet
 - [ ] Rework `Context` + scope
   - How would you look up anonymous Lvalue eg array index
-- [ ] Handle escape sequences in strings
+- [x] Handle escape sequences in strings
 - [x] No longer evaluate statements to values
 - [ ] Get rid of REPL macros or make them better
 - [ ] Write REPL language help page (.HELP)
@@ -52,4 +53,4 @@
 - [x] Unary negate operator doesn't work
 - [x] Body of lambdas do not return value of body
 - [x] `RuntimeValue`: "private type `FunctionType` in public interface"
-- [ ] `loc` in lexer is not accurate
+- [x] `loc` in lexer is not accurate
