@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
+    rc::Rc,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -51,8 +52,16 @@ pub enum AstNode {
     Statement(Statement),
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Block(pub Vec<AstNode>);
+#[derive(Debug, Clone)]
+pub struct Block(pub Rc<[AstNode]>);
+thread_local! {
+    static EMPTY_BLOCK_DATA: Rc<[AstNode]> = Rc::new([]);
+}
+impl Block {
+    pub fn empty() -> Self {
+        Block(EMPTY_BLOCK_DATA.with(|x| x.clone()))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -92,8 +101,8 @@ pub enum Expression {
     While(Box<Expression>, Block),
     With(Box<Expression>, Block),
     New(Block),
-    Lambda(Vec<Identifier>, Block),
-    FunctionCall(Box<Expression>, Vec<Expression>),
+    Lambda(Rc<[Identifier]>, Block),
+    FunctionCall(Box<Expression>, Rc<[Expression]>),
     Block(Block),
     Literal(Literal),
     Variable(Identifier),

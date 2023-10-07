@@ -331,7 +331,7 @@ impl Parser {
         }
 
         if let TokenKind::RightBrace = self.consume() {
-            Ok(Block(block))
+            Ok(Block(block.into()))
         } else {
             Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
         }
@@ -349,13 +349,13 @@ impl Parser {
             // else if
             (TokenKind::Else, TokenKind::If) => {
                 self.consume();
-                Block(vec![AstNode::Expression(self.parse_if_expression()?)])
+                Block(Rc::new([AstNode::Expression(self.parse_if_expression()?)]))
             }
             (TokenKind::Else, _) => {
                 self.consume();
                 self.parse_braced_block(Construct::ElseBody)?
             }
-            _ => Default::default(),
+            _ => Block::empty(),
         };
         Ok(Expression::IfElse(Box::new(cond), body, else_))
     }
@@ -364,7 +364,7 @@ impl Parser {
         self.expect(TokenKind::Lambda, Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
         let body = self.parse_braced_block(Construct::LambdaBody)?;
-        Ok(Expression::Lambda(params, body))
+        Ok(Expression::Lambda(params.into(), body))
     }
 
     fn parse_lambda_params(&mut self) -> Result<Vec<Identifier>, Error> {
@@ -392,7 +392,7 @@ impl Parser {
         }
     }
 
-    fn parse_function_args(&mut self) -> Result<Vec<Expression>, Error> {
+    fn parse_function_args(&mut self) -> Result<Rc<[Expression]>, Error> {
         const ORT: Construct = Construct::FunctionCall;
         self.expect(TokenKind::LeftParen, ORT)?;
         let mut args: Vec<Expression> = Default::default();
@@ -405,7 +405,7 @@ impl Parser {
             }
         }
         self.expect(TokenKind::RightParen, ORT)?;
-        Ok(args)
+        Ok(args.into())
     }
 
     fn parse_lvalue(&mut self, ort: Construct) -> Result<Lvalue, Error> {

@@ -132,7 +132,7 @@ pub struct Object(Rc<Context>);
 #[derive(Debug)]
 pub struct Lambda {
     parent_scope: Rc<Context>,
-    parameters: Vec<Identifier>,
+    parameters: Rc<[Identifier]>,
     body: Block,
 }
 
@@ -146,7 +146,7 @@ impl Interpreter {
         }
     }
     fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
-        node.eval(self.context.clone())
+        node.eval(Rc::clone(&self.context))
     }
     pub fn interpret(
         &mut self,
@@ -318,15 +318,15 @@ impl Eval for Statement {
         match self {
             Self::Declaration(lhs, rhs, is_const) => {
                 if !ctx.contains_in_scope(&lhs.name) {
-                    let value = rhs.eval(ctx.clone())?;
-                    ctx.declare(lhs.name.clone(), value, *is_const);
+                    let value = rhs.eval(Rc::clone(&ctx))?;
+                    ctx.declare(lhs.name.to_owned(), value, *is_const);
                 } else {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.clone()))?
+                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_owned()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
                 if ctx.contains(lhs.name().unwrap()) {
-                    let value = rhs.eval(ctx.clone())?;
+                    let value = rhs.eval(Rc::clone(&ctx))?;
                     ctx.update(lhs.name().unwrap().to_owned(), value)?;
                 } else {
                     Err(RuntimeError::UnknownIdentifier(
@@ -349,7 +349,7 @@ impl Eval for Expression {
             Self::Unary(op, erand) => do_unary_operation(*op, erand, ctx)?,
 
             Self::IfElse(cond, body, else_block) => {
-                if cond.eval(ctx.clone())?.boolean()? {
+                if cond.eval(Rc::clone(&ctx))?.boolean()? {
                     body.eval(ctx)?
                 } else {
                     else_block.eval(ctx)?
@@ -357,8 +357,8 @@ impl Eval for Expression {
             }
             Self::While(cond, body) => {
                 let mut ret = RuntimeValue::None;
-                while cond.eval(ctx.clone())?.boolean()? {
-                    ret = body.eval(ctx.clone())?;
+                while cond.eval(Rc::clone(&ctx))?.boolean()? {
+                    ret = body.eval(Rc::clone(&ctx))?;
                 }
                 ret
             }
@@ -375,7 +375,7 @@ impl Eval for Expression {
             }
             Self::New(block) => {
                 let ctx = Rc::new(Context::new(ctx));
-                block.eval_with_context(ctx.clone())?;
+                block.eval_with_context(Rc::clone(&ctx))?;
                 RuntimeValue::Object(Object(ctx))
             }
             Self::Literal(lit) => lit.eval(ctx)?,
@@ -384,14 +384,14 @@ impl Eval for Expression {
             Self::Lambda(param, body) => {
                 RuntimeValue::Function(Rc::new(FunctionType::Lambda(Lambda {
                     parent_scope: ctx,
-                    parameters: param.to_owned(),
-                    body: body.to_owned(),
+                    parameters: Rc::clone(param),
+                    body: body.clone(),
                 })))
             }
             Self::FunctionCall(fun, args) => do_function_call(
-                fun.eval(ctx.clone())?,
+                fun.eval(Rc::clone(&ctx))?,
                 args.iter()
-                    .map(|x| x.eval(ctx.clone()))
+                    .map(|x| x.eval(Rc::clone(&ctx)))
                     .collect::<Result<Vec<RuntimeValue>, _>>()?,
             )?,
         })
@@ -405,35 +405,39 @@ fn do_binary_operation(
     ctx: Rc<Context>,
 ) -> Result<RuntimeValue, Error> {
     Ok(match op {
-        BinaryOperator::Equal => RuntimeValue::Boolean(lhs.eval(ctx.clone())? == rhs.eval(ctx)?),
-        BinaryOperator::NotEqual => RuntimeValue::Boolean(lhs.eval(ctx.clone())? != rhs.eval(ctx)?),
+        BinaryOperator::Equal => {
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))? == rhs.eval(ctx)?)
+        }
+        BinaryOperator::NotEqual => {
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))? != rhs.eval(ctx)?)
+        }
         BinaryOperator::LessThan => {
-            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx)?.int()?)
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? < rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::LessEqual => {
-            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx)?.int()?)
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? <= rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::GreaterThan => {
-            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx)?.int()?)
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? > rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::GreaterEqual => {
-            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx)?.int()?)
+            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? >= rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::Add => {
-            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx)?.int()?)
+            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? + rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::Subtract => {
-            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx)?.int()?)
+            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? - rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::Multiply => {
-            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx)?.int()?)
+            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? * rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::Divide => {
-            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx)?.int()?)
+            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? / rhs.eval(ctx)?.int()?)
         }
         BinaryOperator::Concatenate => RuntimeValue::String(format!(
             "{}{}",
-            lhs.eval(ctx.clone())?.string()?,
+            lhs.eval(Rc::clone(&ctx))?.string()?,
             rhs.eval(ctx)?.string()?
         )),
     })
@@ -458,7 +462,7 @@ fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<Runtim
                     parameters,
                     body,
                 }) => {
-                    let scope = Context::new(parent_scope.clone());
+                    let scope = Context::new(Rc::clone(parent_scope));
                     if parameters.len() != args.len() {
                         Err(RuntimeError::ExpectedArgumentsFound(
                             parameters.len(),
@@ -487,10 +491,10 @@ impl Eval for Block {
 }
 impl Block {
     fn eval_with_context(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        let Self(vec) = self;
+        let Self(nodes) = self;
         let mut ret = RuntimeValue::None;
-        for node in vec {
-            ret = node.eval(ctx.clone())?;
+        for node in nodes.iter() {
+            ret = node.eval(Rc::clone(&ctx))?;
         }
         Ok(ret)
     }
