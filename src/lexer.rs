@@ -353,16 +353,8 @@ impl Lexer {
         }
     }
 
-    // next and convert Newline To Semicolon
-    pub fn next_token_nts(&mut self) -> Token {
+    pub fn next_token_allow_newline(&mut self) -> Token {
         match self.tokens.pop_front() {
-            Some(Token {
-                kind: TokenKind::Newline,
-                loc,
-            }) => Token {
-                kind: TokenKind::Semicolon,
-                loc,
-            },
             Some(tok) => tok,
             None => Token {
                 kind: TokenKind::Eof,

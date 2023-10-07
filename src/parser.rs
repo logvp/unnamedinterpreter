@@ -22,15 +22,13 @@ impl Parser {
             let node = self.parse_ast_node()?;
             match node {
                 ast::AstNode::Statement(_) => ast.push(node),
+                ast::AstNode::Expression(expr) if !matches!(self.token(), TokenKind::Eof) => {
+                    self.expect_semicolon()?;
+                    ast.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
+                }
                 ast::AstNode::Expression(_) => {
-                    if !matches!(self.token(), TokenKind::Eof) {
-                        let ast::AstNode::Expression(expr) = node else {unreachable!()};
-                        self.expect_semicolon()?;
-                        ast.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
-                    } else {
-                        ast.push(node);
-                        break;
-                    }
+                    ast.push(node);
+                    break;
                 }
             }
         }
@@ -304,8 +302,12 @@ impl Parser {
         while !matches!(self.token(), TokenKind::RightBrace) {
             let node = self.parse_ast_node()?;
             match node {
-                ast::AstNode::Statement(_) => {
-                    block.push(node);
+                ast::AstNode::Statement(_) => block.push(node),
+                ast::AstNode::Expression(expr)
+                    if !matches!(self.token(), TokenKind::RightBrace) =>
+                {
+                    self.expect_semicolon()?;
+                    block.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
                 }
                 ast::AstNode::Expression(_) => {
                     block.push(node);
@@ -411,10 +413,10 @@ impl Parser {
         }
     }
 
-    fn expect_semicolon(&mut self) -> Result<TokenKind, Error> {
-        let Token { kind, loc } = self.lexer.next_token_nts();
-        if matches!(kind, TokenKind::Semicolon) {
-            Ok(kind)
+    fn expect_semicolon(&mut self) -> Result<(), Error> {
+        let Token { kind, loc } = self.lexer.next_token_allow_newline();
+        if matches!(kind, TokenKind::Semicolon | TokenKind::Newline) {
+            Ok(())
         } else {
             Err(SyntaxError::ExpectedTokenIn(
                 TokenKind::Semicolon,
