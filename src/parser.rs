@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::ast;
+use crate::ast::{
+    Ast, AstNode, BinaryOperator, Block, Construct, Expression, Identifier, Lvalue, Statement,
+    UnaryOperator,
+};
 use crate::error::{Error, Loc, SyntaxError};
 use crate::lexer::{Lexer, Token, TokenKind};
 
@@ -16,17 +19,17 @@ impl Parser {
         })
     }
 
-    pub fn gen_ast(&mut self) -> Result<ast::Ast, Error> {
-        let mut ast: ast::Ast = Default::default();
+    pub fn gen_ast(&mut self) -> Result<Ast, Error> {
+        let mut ast = Ast::default();
         while !matches!(self.token(), TokenKind::Eof) {
             let node = self.parse_ast_node()?;
             match node {
-                ast::AstNode::Statement(_) => ast.push(node),
-                ast::AstNode::Expression(expr) if !matches!(self.token(), TokenKind::Eof) => {
+                AstNode::Statement(_) => ast.push(node),
+                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::Eof) => {
                     self.expect_semicolon()?;
-                    ast.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
+                    ast.push(AstNode::Statement(Statement::Expression(expr)))
                 }
-                ast::AstNode::Expression(_) => {
+                AstNode::Expression(_) => {
                     ast.push(node);
                     break;
                 }
@@ -36,31 +39,30 @@ impl Parser {
         if let TokenKind::Eof = self.consume() {
             Ok(ast)
         } else {
-            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(
-                ast::Construct::AstNode,
-                self.loc.clone(),
+            Err(
+                SyntaxError::ExpressionMayOnlyComeAtEndIn(Construct::AstNode, self.loc.clone())
+                    .into(),
             )
-            .into())
         }
     }
 
-    fn parse_ast_node(&mut self) -> Result<ast::AstNode, Error> {
+    fn parse_ast_node(&mut self) -> Result<AstNode, Error> {
         if let Some(statement) = match self.token() {
             TokenKind::Var => {
                 self.consume();
-                let identifier = self.parse_identifier(ast::Construct::Var)?;
+                let identifier = self.parse_identifier(Construct::Var)?;
                 let equal = self.consume();
                 if let TokenKind::Equal = equal {
-                    Some(ast::Statement::Declaration(
+                    Some(Statement::Declaration(
                         identifier,
-                        self.parse_expression(ast::Construct::Var)?,
+                        self.parse_expression(Construct::Var)?,
                         false,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         TokenKind::Equal,
                         equal,
-                        ast::Construct::Var,
+                        Construct::Var,
                         self.loc.clone(),
                     )
                     .into());
@@ -68,19 +70,19 @@ impl Parser {
             }
             TokenKind::Let => {
                 self.consume();
-                let identifier = self.parse_identifier(ast::Construct::Let)?;
+                let identifier = self.parse_identifier(Construct::Let)?;
                 let equal = self.consume();
                 if let TokenKind::Equal = equal {
-                    Some(ast::Statement::Declaration(
+                    Some(Statement::Declaration(
                         identifier,
-                        self.parse_expression(ast::Construct::Let)?,
+                        self.parse_expression(Construct::Let)?,
                         true,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         TokenKind::Equal,
                         equal,
-                        ast::Construct::Var,
+                        Construct::Var,
                         self.loc.clone(),
                     )
                     .into());
@@ -88,188 +90,205 @@ impl Parser {
             }
             TokenKind::Set => {
                 self.consume();
-                let lvalue = self.parse_lvalue(ast::Construct::Set)?;
+                let lvalue = self.parse_lvalue(Construct::Set)?;
                 let equal = self.consume();
                 if let TokenKind::Equal = equal {
-                    Some(ast::Statement::Assignment(
+                    Some(Statement::Assignment(
                         lvalue,
-                        self.parse_expression(ast::Construct::Set)?,
+                        self.parse_expression(Construct::Set)?,
                     ))
                 } else {
                     return Err(SyntaxError::ExpectedTokenIn(
                         TokenKind::Equal,
                         equal,
-                        ast::Construct::Set,
+                        Construct::Set,
                         self.loc.clone(),
                     )
                     .into());
                 }
             }
             TokenKind::Identifier(_) if matches!(self.peek(), &TokenKind::ColonEqual) => {
-                let identifier = self.parse_identifier(ast::Construct::SimpleDeclaration)?;
+                let identifier = self.parse_identifier(Construct::SimpleDeclaration)?;
                 // consume `:=`
                 self.consume();
-                Some(ast::Statement::Declaration(
+                Some(Statement::Declaration(
                     identifier,
-                    self.parse_expression(ast::Construct::SimpleDeclaration)?,
+                    self.parse_expression(Construct::SimpleDeclaration)?,
                     false,
                 ))
             }
             // TODO: Only checks for identifier not for Lvalue
             TokenKind::Identifier(_) if matches!(self.peek(), TokenKind::Equal) => {
-                let lvalue = self.parse_lvalue(ast::Construct::SimpleAssignment)?;
+                let lvalue = self.parse_lvalue(Construct::SimpleAssignment)?;
                 // consume `=`
                 self.consume();
-                Some(ast::Statement::Assignment(
+                Some(Statement::Assignment(
                     lvalue,
-                    self.parse_expression(ast::Construct::SimpleAssignment)?,
+                    self.parse_expression(Construct::SimpleAssignment)?,
                 ))
             }
             _ => None,
         } {
             self.expect_semicolon()?;
-            return Ok(ast::AstNode::Statement(statement));
+            return Ok(AstNode::Statement(statement));
         }
         // Let, Set, SimpleDeclaration, SimpleAssignment cases are covered
         // Statement::Expression and Expression need to be handled
-        let expression = self.parse_expression(ast::Construct::Expression)?;
+        let expression = self.parse_expression(Construct::Expression)?;
 
         if let TokenKind::Semicolon = self.token() {
             self.consume();
-            Ok(ast::AstNode::Statement(ast::Statement::Expression(
-                expression,
-            )))
+            Ok(AstNode::Statement(Statement::Expression(expression)))
         } else {
-            Ok(ast::AstNode::Expression(expression))
+            Ok(AstNode::Expression(expression))
         }
     }
 
-    fn parse_expression(&mut self, ort: ast::Construct) -> Result<ast::Expression, Error> {
+    fn parse_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
         Ok(match self.token() {
             TokenKind::If => self.parse_if_expression()?,
             TokenKind::While => {
                 self.consume();
-                let cond = self.parse_parenthetical_expression(ast::Construct::WhileCondition)?;
-                let body = self.parse_braced_block(ast::Construct::WhileBody)?;
-                ast::Expression::While(Box::new(cond), body)
+                let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
+                let body = self.parse_braced_block(Construct::WhileBody)?;
+                Expression::While(Box::new(cond), body)
             }
             TokenKind::With => {
                 self.consume();
-                let object = self.parse_parenthetical_expression(ast::Construct::With)?;
-                let body = self.parse_braced_block(ast::Construct::With)?;
-                ast::Expression::With(Box::new(object), body)
+                let object = self.parse_parenthetical_expression(Construct::With)?;
+                let body = self.parse_braced_block(Construct::With)?;
+                Expression::With(Box::new(object), body)
             }
             TokenKind::New => {
                 self.consume();
-                let body = self.parse_braced_block(ast::Construct::NewBlock)?;
-                ast::Expression::New(body)
+                let body = self.parse_braced_block(Construct::NewBlock)?;
+                Expression::New(body)
             }
             _ => {
-                let lhs: ast::Term = self.parse_term(ort)?;
+                let lhs: Expression = self.parse_term(ort)?;
                 match self.token() {
                     TokenKind::Plus => {
                         self.consume();
-                        ast::Expression::Add(lhs, Box::new(self.parse_expression(ort)?))
+                        Expression::Binary(
+                            BinaryOperator::Add,
+                            Box::new(lhs),
+                            Box::new(self.parse_expression(ort)?),
+                        )
                     }
                     TokenKind::Minus => {
                         self.consume();
-                        ast::Expression::Subtract(lhs, Box::new(self.parse_expression(ort)?))
+                        Expression::Binary(
+                            BinaryOperator::Subtract,
+                            Box::new(lhs),
+                            Box::new(self.parse_expression(ort)?),
+                        )
                     }
                     TokenKind::EqualEqual => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::Equal,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::Equal,
                         )
                     }
                     TokenKind::LessEqual => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::LessEqual,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::LessEqual,
                         )
                     }
                     TokenKind::LeftAngle => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::LessThan,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::LessThan,
                         )
                     }
                     TokenKind::GreaterEqual => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::GreaterEqual,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::GreaterEqual,
                         )
                     }
                     TokenKind::RightAngle => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::GreaterThan,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::GreaterThan,
                         )
                     }
                     TokenKind::SlashEqual => {
                         self.consume();
-                        ast::Expression::Compare(
-                            lhs,
+                        Expression::Binary(
+                            BinaryOperator::NotEqual,
+                            Box::new(lhs),
                             Box::new(self.parse_expression(ort)?),
-                            ast::Comparison::NotEqual,
                         )
                     }
-                    _ => ast::Expression::Term(lhs),
+                    _ => lhs,
                 }
             }
         })
     }
 
-    fn parse_term(&mut self, ort: ast::Construct) -> Result<ast::Term, Error> {
-        let lhs: ast::Factor = self.parse_factor(ort)?;
+    fn parse_term(&mut self, ort: Construct) -> Result<Expression, Error> {
+        let lhs = self.parse_factor(ort)?;
         Ok(match self.token() {
             TokenKind::Star => {
                 self.consume();
-                ast::Term::Multiply(lhs, Box::new(self.parse_term(ort)?))
+                Expression::Binary(
+                    BinaryOperator::Multiply,
+                    Box::new(lhs),
+                    Box::new(self.parse_term(ort)?),
+                )
             }
             TokenKind::Slash => {
                 self.consume();
-                ast::Term::Divide(lhs, Box::new(self.parse_term(ort)?))
+                Expression::Binary(
+                    BinaryOperator::Divide,
+                    Box::new(lhs),
+                    Box::new(self.parse_term(ort)?),
+                )
             }
             TokenKind::PlusPlus => {
                 self.consume();
-                ast::Term::Concatenate(lhs, Box::new(self.parse_term(ort)?))
+                Expression::Binary(
+                    BinaryOperator::Concatenate,
+                    Box::new(lhs),
+                    Box::new(self.parse_term(ort)?),
+                )
             }
-            _ => ast::Term::Factor(lhs),
+            _ => lhs,
         })
     }
 
-    fn parse_factor(&mut self, ort: ast::Construct) -> Result<ast::Factor, Error> {
+    fn parse_factor(&mut self, ort: Construct) -> Result<Expression, Error> {
         let factor = match self.token() {
             TokenKind::Lambda => self.parse_lambda_expression()?,
-            TokenKind::LeftParen => ast::Factor::Expression(Box::new(
-                self.parse_parenthetical_expression(ast::Construct::Expression)?,
-            )),
+            TokenKind::LeftParen => self.parse_parenthetical_expression(Construct::Expression)?,
+
             TokenKind::LeftBrace => {
-                ast::Factor::Block(self.parse_braced_block(ast::Construct::BlockScope)?)
+                Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
             }
             TokenKind::Minus => {
                 self.consume();
-                ast::Factor::Negate(Box::new(self.parse_factor(ort)?))
+                Expression::Unary(UnaryOperator::Negate, Box::new(self.parse_factor(ort)?))
             }
             TokenKind::Literal(literal) => {
                 let literal = literal.to_owned();
                 self.consume();
-                ast::Factor::Literal(literal)
+                Expression::Literal(literal)
             }
             TokenKind::Identifier(name) => {
                 let name = name.to_owned();
                 self.consume();
-                ast::Factor::Variable(ast::Identifier { name })
+                Expression::Variable(Identifier { name })
             }
             _ => {
                 let tok = self.consume();
@@ -283,10 +302,7 @@ impl Parser {
         }
     }
 
-    fn parse_parenthetical_expression(
-        &mut self,
-        ort: ast::Construct,
-    ) -> Result<ast::Expression, Error> {
+    fn parse_parenthetical_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
         self.expect(TokenKind::LeftParen, ort)?;
 
         let parenthesized = self.parse_expression(ort)?;
@@ -296,20 +312,18 @@ impl Parser {
         Ok(parenthesized)
     }
 
-    fn parse_braced_block(&mut self, ort: ast::Construct) -> Result<ast::Block, Error> {
+    fn parse_braced_block(&mut self, ort: Construct) -> Result<Block, Error> {
         self.expect(TokenKind::LeftBrace, ort)?;
-        let mut block: Vec<ast::AstNode> = Default::default();
+        let mut block: Vec<AstNode> = Default::default();
         while !matches!(self.token(), TokenKind::RightBrace) {
             let node = self.parse_ast_node()?;
             match node {
-                ast::AstNode::Statement(_) => block.push(node),
-                ast::AstNode::Expression(expr)
-                    if !matches!(self.token(), TokenKind::RightBrace) =>
-                {
+                AstNode::Statement(_) => block.push(node),
+                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::RightBrace) => {
                     self.expect_semicolon()?;
-                    block.push(ast::AstNode::Statement(ast::Statement::Expression(expr)))
+                    block.push(AstNode::Statement(Statement::Expression(expr)))
                 }
-                ast::AstNode::Expression(_) => {
+                AstNode::Expression(_) => {
                     block.push(node);
                     break;
                 }
@@ -317,46 +331,46 @@ impl Parser {
         }
 
         if let TokenKind::RightBrace = self.consume() {
-            Ok(ast::Block(block))
+            Ok(Block(block))
         } else {
             Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
         }
     }
 
-    fn parse_if_expression(&mut self) -> Result<ast::Expression, Error> {
+    fn parse_if_expression(&mut self) -> Result<Expression, Error> {
         if let TokenKind::If = self.token() {
             self.consume();
         } else {
             unreachable!()
         }
-        let cond = self.parse_parenthetical_expression(ast::Construct::IfCondition)?;
-        let body = self.parse_braced_block(ast::Construct::IfBody)?;
+        let cond = self.parse_parenthetical_expression(Construct::IfCondition)?;
+        let body = self.parse_braced_block(Construct::IfBody)?;
         let else_ = match (self.token(), self.peek()) {
             // else if
             (TokenKind::Else, TokenKind::If) => {
                 self.consume();
-                ast::Block(vec![ast::AstNode::Expression(self.parse_if_expression()?)])
+                Block(vec![AstNode::Expression(self.parse_if_expression()?)])
             }
             (TokenKind::Else, _) => {
                 self.consume();
-                self.parse_braced_block(ast::Construct::ElseBody)?
+                self.parse_braced_block(Construct::ElseBody)?
             }
             _ => Default::default(),
         };
-        Ok(ast::Expression::IfElse(Box::new(cond), body, else_))
+        Ok(Expression::IfElse(Box::new(cond), body, else_))
     }
 
-    fn parse_lambda_expression(&mut self) -> Result<ast::Factor, Error> {
-        self.expect(TokenKind::Lambda, ast::Construct::Lambda)?;
+    fn parse_lambda_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::Lambda, Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
-        let body = self.parse_braced_block(ast::Construct::LambdaBody)?;
-        Ok(ast::Factor::Lambda(params, body))
+        let body = self.parse_braced_block(Construct::LambdaBody)?;
+        Ok(Expression::Lambda(params, body))
     }
 
-    fn parse_lambda_params(&mut self) -> Result<Vec<ast::Identifier>, Error> {
-        const ORT: ast::Construct = ast::Construct::ParameterList;
+    fn parse_lambda_params(&mut self) -> Result<Vec<Identifier>, Error> {
+        const ORT: Construct = Construct::ParameterList;
         self.expect(TokenKind::LeftParen, ORT)?;
-        let mut params: Vec<ast::Identifier> = Default::default();
+        let mut params: Vec<Identifier> = Default::default();
         if !matches!(self.token(), TokenKind::RightParen) {
             params.push(self.parse_identifier(ORT)?);
 
@@ -369,8 +383,8 @@ impl Parser {
         Ok(params)
     }
 
-    fn parse_function_call(&mut self, func: ast::Factor) -> Result<ast::Factor, Error> {
-        let call = ast::Factor::FunctionCall(Box::new(func), self.parse_function_args()?);
+    fn parse_function_call(&mut self, func: Expression) -> Result<Expression, Error> {
+        let call = Expression::FunctionCall(Box::new(func), self.parse_function_args()?);
         if let TokenKind::LeftParen = self.token() {
             self.parse_function_call(call)
         } else {
@@ -378,10 +392,10 @@ impl Parser {
         }
     }
 
-    fn parse_function_args(&mut self) -> Result<Vec<ast::Expression>, Error> {
-        const ORT: ast::Construct = ast::Construct::FunctionCall;
+    fn parse_function_args(&mut self) -> Result<Vec<Expression>, Error> {
+        const ORT: Construct = Construct::FunctionCall;
         self.expect(TokenKind::LeftParen, ORT)?;
-        let mut args: Vec<ast::Expression> = Default::default();
+        let mut args: Vec<Expression> = Default::default();
         if !matches!(self.token(), TokenKind::RightParen) && !self.eof() {
             args.push(self.parse_expression(ORT)?);
 
@@ -394,14 +408,14 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_lvalue(&mut self, ort: ast::Construct) -> Result<ast::Lvalue, Error> {
-        Ok(ast::Lvalue::Identifier(self.parse_identifier(ort)?))
+    fn parse_lvalue(&mut self, ort: Construct) -> Result<Lvalue, Error> {
+        Ok(Lvalue::Identifier(self.parse_identifier(ort)?))
     }
 
-    fn parse_identifier(&mut self, ort: ast::Construct) -> Result<ast::Identifier, Error> {
+    fn parse_identifier(&mut self, ort: Construct) -> Result<Identifier, Error> {
         let ident = self.consume();
         if let TokenKind::Identifier(name) = ident {
-            Ok(ast::Identifier { name })
+            Ok(Identifier { name })
         } else {
             Err(SyntaxError::ExpectedTokenIn(
                 TokenKind::Identifier(String::new()),
@@ -418,21 +432,14 @@ impl Parser {
         if matches!(kind, TokenKind::Semicolon | TokenKind::Newline) {
             Ok(())
         } else {
-            Err(SyntaxError::ExpectedTokenIn(
-                TokenKind::Semicolon,
-                kind,
-                ast::Construct::Statement,
-                loc,
+            Err(
+                SyntaxError::ExpectedTokenIn(TokenKind::Semicolon, kind, Construct::Statement, loc)
+                    .into(),
             )
-            .into())
         }
     }
 
-    fn expect(
-        &mut self,
-        expected_kind: TokenKind,
-        ort: ast::Construct,
-    ) -> Result<TokenKind, Error> {
+    fn expect(&mut self, expected_kind: TokenKind, ort: Construct) -> Result<TokenKind, Error> {
         let token = self.consume();
         if expected_kind.kind_eq(&token) {
             Ok(token)

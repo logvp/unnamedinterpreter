@@ -345,22 +345,9 @@ impl Eval for Statement {
 impl Eval for Expression {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         Ok(match self {
-            Self::Add(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx)?.int()?)
-            }
-            Self::Subtract(lhs, rhs) => {
-                RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx)?.int()?)
-            }
-            Self::Compare(lhs, rhs, op) => RuntimeValue::Boolean(match op {
-                Comparison::Equal => lhs.eval(ctx.clone())? == rhs.eval(ctx)?,
-                Comparison::NotEqual => lhs.eval(ctx.clone())? != rhs.eval(ctx)?,
-                Comparison::LessThan => lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx)?.int()?,
-                Comparison::LessEqual => lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx)?.int()?,
-                Comparison::GreaterThan => lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx)?.int()?,
-                Comparison::GreaterEqual => {
-                    lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx)?.int()?
-                }
-            }),
+            Self::Binary(op, lhs, rhs) => do_binary_operation(*op, lhs, rhs, ctx)?,
+            Self::Unary(op, erand) => do_unary_operation(*op, erand, ctx)?,
+
             Self::IfElse(cond, body, else_block) => {
                 if cond.eval(ctx.clone())?.boolean()? {
                     body.eval(ctx)?
@@ -391,52 +378,74 @@ impl Eval for Expression {
                 block.eval_with_context(ctx.clone())?;
                 RuntimeValue::Object(Object(ctx))
             }
-            Self::Term(term) => term.eval(ctx)?,
-        })
-    }
-}
-
-impl Eval for Term {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match self {
-            Self::Multiply(lhs, rhs) => Ok(RuntimeValue::Integer(
-                lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx)?.int()?,
-            )),
-            Self::Divide(lhs, rhs) => Ok(RuntimeValue::Integer(
-                lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx)?.int()?,
-            )),
-            Self::Concatenate(lhs, rhs) => Ok(RuntimeValue::String(format!(
-                "{}{}",
-                lhs.eval(ctx.clone())?.string()?,
-                rhs.eval(ctx)?.string()?
-            ))),
-            Self::Factor(factor) => factor.eval(ctx),
-        }
-    }
-}
-
-impl Eval for Factor {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match self {
-            Self::Literal(lit) => lit.eval(ctx),
-            Self::Expression(expr) => expr.eval(ctx),
-            Self::Negate(factor) => Ok(RuntimeValue::Integer(-factor.eval(ctx)?.int()?)),
-            Self::Variable(identifier) => identifier.eval(ctx),
-            Self::Block(block) => block.eval(ctx),
-            Self::Lambda(param, body) => Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda(
-                Lambda {
+            Self::Literal(lit) => lit.eval(ctx)?,
+            Self::Variable(identifier) => identifier.eval(ctx)?,
+            Self::Block(block) => block.eval(ctx)?,
+            Self::Lambda(param, body) => {
+                RuntimeValue::Function(Rc::new(FunctionType::Lambda(Lambda {
                     parent_scope: ctx,
                     parameters: param.to_owned(),
                     body: body.to_owned(),
-                },
-            )))),
+                })))
+            }
             Self::FunctionCall(fun, args) => do_function_call(
                 fun.eval(ctx.clone())?,
                 args.iter()
                     .map(|x| x.eval(ctx.clone()))
                     .collect::<Result<Vec<RuntimeValue>, _>>()?,
-            ),
+            )?,
+        })
+    }
+}
+
+fn do_binary_operation(
+    op: BinaryOperator,
+    lhs: &Expression,
+    rhs: &Expression,
+    ctx: Rc<Context>,
+) -> Result<RuntimeValue, Error> {
+    Ok(match op {
+        BinaryOperator::Equal => RuntimeValue::Boolean(lhs.eval(ctx.clone())? == rhs.eval(ctx)?),
+        BinaryOperator::NotEqual => RuntimeValue::Boolean(lhs.eval(ctx.clone())? != rhs.eval(ctx)?),
+        BinaryOperator::LessThan => {
+            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? < rhs.eval(ctx)?.int()?)
         }
+        BinaryOperator::LessEqual => {
+            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? <= rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::GreaterThan => {
+            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? > rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::GreaterEqual => {
+            RuntimeValue::Boolean(lhs.eval(ctx.clone())?.int()? >= rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::Add => {
+            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? + rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::Subtract => {
+            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? - rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::Multiply => {
+            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? * rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::Divide => {
+            RuntimeValue::Integer(lhs.eval(ctx.clone())?.int()? / rhs.eval(ctx)?.int()?)
+        }
+        BinaryOperator::Concatenate => RuntimeValue::String(format!(
+            "{}{}",
+            lhs.eval(ctx.clone())?.string()?,
+            rhs.eval(ctx)?.string()?
+        )),
+    })
+}
+
+fn do_unary_operation(
+    op: UnaryOperator,
+    erand: &Expression,
+    ctx: Rc<Context>,
+) -> Result<RuntimeValue, Error> {
+    match op {
+        UnaryOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
     }
 }
 

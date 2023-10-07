@@ -55,7 +55,7 @@ mod tests {
     fn parser() {
         let mut parser = Parser::new(PROGRAM, None).unwrap();
         let ast = parser.gen_ast().unwrap();
-        println!("--- AST ---\n{}", ast);
+        println!("--- AST ---\n{:?}", ast);
     }
 
     #[test]
