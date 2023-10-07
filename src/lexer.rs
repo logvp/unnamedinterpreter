@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, fmt::Display, iter::Peekable, rc::Rc};
 
 pub use crate::ast::Literal;
-use crate::error::{LexerError, Loc};
+use crate::error::{LexicalError, Loc};
 
 #[derive(Debug)]
 pub struct Token {
@@ -108,7 +108,7 @@ pub struct Lexer {
     end: Loc,
 }
 impl Lexer {
-    pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexerError> {
+    pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexicalError> {
         let mut chars = text.chars().peekable();
         let mut tokens: VecDeque<Token> = VecDeque::new();
         let mut buffer = String::new();
@@ -169,7 +169,7 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0x10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexerError::BadHexLiteral(buffer, loc)),
+                        Err(_) => return Err(LexicalError::BadHexLiteral(buffer, loc)),
                     }
                 }
                 '0' if next_if_eq(&mut chars, 'b', &mut loc) => {
@@ -178,7 +178,7 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0b10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexerError::BadBinLiteral(buffer, loc)),
+                        Err(_) => return Err(LexicalError::BadBinLiteral(buffer, loc)),
                     }
                 }
                 '0'..='9' => {
@@ -197,7 +197,7 @@ impl Lexer {
                     fn chomp_comment(
                         mut chars: &mut Peekable<impl Iterator<Item = char>>,
                         start_loc: Loc,
-                    ) -> Result<Loc, LexerError> {
+                    ) -> Result<Loc, LexicalError> {
                         let mut loc = start_loc.clone();
                         while let Some(c) = chars.next() {
                             match c {
@@ -208,7 +208,7 @@ impl Lexer {
                                 _ => loc.inc(c),
                             }
                         }
-                        return Err(LexerError::UnmatchedMultilineComment(start_loc));
+                        return Err(LexicalError::UnmatchedMultilineComment(start_loc));
                     }
                     loc = chomp_comment(&mut chars, loc)?;
                     continue;
@@ -227,7 +227,7 @@ impl Lexer {
                                         't' => buffer.push('\t'),
                                         '"' => buffer.push('"'),
                                         '\\' => buffer.push('\\'),
-                                        _ => return Err(LexerError::InvalidEscape(c, loc)),
+                                        _ => return Err(LexicalError::InvalidEscape(c, loc)),
                                     }
                                 }
                             }
@@ -239,7 +239,7 @@ impl Lexer {
 
                         TokenKind::Literal(Literal::String(buffer.clone()))
                     } else {
-                        return Err(LexerError::UnterminatedStringLiteral(buffer, loc));
+                        return Err(LexicalError::UnterminatedStringLiteral(buffer, loc));
                     }
                 }
                 '<' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::LessEqual,
@@ -296,7 +296,7 @@ impl Lexer {
                     build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |c| {
                         !c.is_whitespace()
                     });
-                    return Err(LexerError::UnknownToken(buffer, loc));
+                    return Err(LexicalError::UnknownToken(buffer, loc));
                 }
             };
             add_tok(&mut tokens, token, &loc)
@@ -361,9 +361,5 @@ impl Lexer {
                 loc: self.end.clone(),
             },
         }
-    }
-
-    pub fn peek_all_tokens(&self) -> impl Iterator<Item = &Token> {
-        self.tokens.iter()
     }
 }

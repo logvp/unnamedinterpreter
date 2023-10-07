@@ -43,12 +43,12 @@ impl Loc {
 
 #[derive(Debug)]
 pub enum Error {
-    Lexer(LexerError),
+    Lexer(LexicalError),
     Syntax(SyntaxError),
     Runtime(RuntimeError),
 }
-impl From<LexerError> for Error {
-    fn from(e: LexerError) -> Self {
+impl From<LexicalError> for Error {
+    fn from(e: LexicalError) -> Self {
         Error::Lexer(e)
     }
 }
@@ -73,7 +73,7 @@ impl Display for Error {
 }
 
 #[derive(Debug)]
-pub enum LexerError {
+pub enum LexicalError {
     UnknownToken(String, Loc),
     UnterminatedStringLiteral(String, Loc),
     UnmatchedMultilineComment(Loc),
@@ -98,7 +98,7 @@ pub enum RuntimeError {
     UnknownIdentifier(String),
 }
 
-impl Display for LexerError {
+impl Display for LexicalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnknownToken(tok, loc) => write!(f, "Unknown token {} at {}", tok, loc),

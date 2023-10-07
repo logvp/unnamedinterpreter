@@ -166,13 +166,18 @@ pub fn init() -> io::Result<()> {
     Ok(())
 }
 
-pub fn run_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
-    if let Ok(content) = std::fs::read_to_string(path) {
-        let result =
-            Interpreter::new().interpret(&content, path.as_ref().to_str().map(|name| name.into()));
+pub fn run_file<P: AsRef<std::path::Path>>(
+    path: &P,
+) -> io::Result<Vec<Result<RuntimeValue, Error>>> {
+    let content = std::fs::read_to_string(path)?;
+    Ok(Interpreter::new().interpret(&content, path.as_ref().to_str().map(|name| name.into())))
+}
+
+pub fn run_and_print_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
+    if let Ok(result) = run_file(path) {
         Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
     } else {
-        println!(
+        eprintln!(
             "Could not open file '{}'",
             path.as_ref()
                 .file_name()
