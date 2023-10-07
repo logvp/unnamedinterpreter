@@ -168,13 +168,8 @@ pub fn init() -> io::Result<()> {
 
 pub fn run_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
     if let Ok(content) = std::fs::read_to_string(path) {
-        let result = Interpreter::new().interpret(
-            &content,
-            path.as_ref()
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.into()),
-        );
+        let result =
+            Interpreter::new().interpret(&content, path.as_ref().to_str().map(|name| name.into()));
         Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
     } else {
         println!(
