@@ -165,107 +165,39 @@ impl Parser {
                 Expression::New(body)
             }
             _ => {
-                let lhs: Expression = self.parse_term(ort)?;
-                match self.token() {
-                    TokenKind::Plus => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::Add,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::Minus => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::Subtract,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::EqualEqual => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::Equal,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::LessEqual => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::LessEqual,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::LeftAngle => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::LessThan,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::GreaterEqual => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::GreaterEqual,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::RightAngle => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::GreaterThan,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    TokenKind::SlashEqual => {
-                        self.consume();
-                        Expression::Binary(
-                            BinaryOperator::NotEqual,
-                            Box::new(lhs),
-                            Box::new(self.parse_expression(ort)?),
-                        )
-                    }
-                    _ => lhs,
-                }
+                let lhs = self.parse_term(ort)?;
+                let op = match self.token() {
+                    TokenKind::Plus => BinaryOperator::Add,
+                    TokenKind::Minus => BinaryOperator::Subtract,
+                    TokenKind::EqualEqual => BinaryOperator::Equal,
+                    TokenKind::LessEqual => BinaryOperator::LessEqual,
+                    TokenKind::LeftAngle => BinaryOperator::LessThan,
+                    TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
+                    TokenKind::RightAngle => BinaryOperator::GreaterThan,
+                    TokenKind::SlashEqual => BinaryOperator::NotEqual,
+                    _ => return Ok(lhs),
+                };
+                self.consume();
+                Expression::Binary(op, Box::new(lhs), Box::new(self.parse_expression(ort)?))
             }
         })
     }
 
     fn parse_term(&mut self, ort: Construct) -> Result<Expression, Error> {
         let lhs = self.parse_factor(ort)?;
-        Ok(match self.token() {
-            TokenKind::Star => {
-                self.consume();
-                Expression::Binary(
-                    BinaryOperator::Multiply,
-                    Box::new(lhs),
-                    Box::new(self.parse_term(ort)?),
-                )
-            }
-            TokenKind::Slash => {
-                self.consume();
-                Expression::Binary(
-                    BinaryOperator::Divide,
-                    Box::new(lhs),
-                    Box::new(self.parse_term(ort)?),
-                )
-            }
-            TokenKind::PlusPlus => {
-                self.consume();
-                Expression::Binary(
-                    BinaryOperator::Concatenate,
-                    Box::new(lhs),
-                    Box::new(self.parse_term(ort)?),
-                )
-            }
-            _ => lhs,
-        })
+        let op = match self.token() {
+            TokenKind::Star => BinaryOperator::Multiply,
+            TokenKind::Slash => BinaryOperator::Divide,
+            TokenKind::PlusPlus => BinaryOperator::Concatenate,
+            _ => return Ok(lhs),
+        };
+
+        self.consume();
+        Ok(Expression::Binary(
+            op,
+            Box::new(lhs),
+            Box::new(self.parse_term(ort)?),
+        ))
     }
 
     fn parse_factor(&mut self, ort: Construct) -> Result<Expression, Error> {
