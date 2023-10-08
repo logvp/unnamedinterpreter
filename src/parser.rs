@@ -150,31 +150,35 @@ impl Parser {
 
     // Expression parser based on https://github.com/matklad/minipratt
     fn parse_expression_rec(&mut self, min_pow: u8, ort: Construct) -> Result<Expression, Error> {
-        let mut lhs = match self.token() {
-            TokenKind::Literal(_) => {
-                let TokenKind::Literal(x) = self.consume() else {unreachable!() };
-                Expression::Literal(x)
-            }
-            TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
-            TokenKind::LeftParen => self.parse_parenthetical_expression(ort)?,
-            token if Self::convert_prefix_operator(&token).is_some() => {
-                let unop = Self::convert_prefix_operator(&self.consume()).unwrap();
-                let r_pow = Self::prefix_power(unop);
-                let rhs = self.parse_expression_rec(r_pow, ort)?;
-                Expression::Unary(unop, Box::new(rhs))
-            }
-            TokenKind::If => self.parse_if_expression()?,
-            TokenKind::While => self.parse_while_expression()?,
-            TokenKind::With => self.parse_with_expression()?,
-            TokenKind::New => self.parse_new_expression()?,
-            TokenKind::Lambda => self.parse_lambda_expression()?,
-            TokenKind::LeftBrace => {
-                Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
-            }
-            _ => {
-                return Err(
-                    SyntaxError::UnexpectedTokenIn(self.consume(), ort, self.loc.clone()).into(),
-                )
+        let mut lhs = if let Some(prefix) = Self::convert_prefix_operator(self.token()) {
+            self.consume();
+            let r_pow = Self::prefix_power(prefix);
+            let rhs = self.parse_expression_rec(r_pow, ort)?;
+            Expression::Unary(prefix, Box::new(rhs))
+        } else {
+            match self.token() {
+                TokenKind::Literal(_) => {
+                    let TokenKind::Literal(x) = self.consume() else {unreachable!() };
+                    Expression::Literal(x)
+                }
+                TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
+                TokenKind::LeftParen => self.parse_parenthetical_expression(ort)?,
+                TokenKind::If => self.parse_if_expression()?,
+                TokenKind::While => self.parse_while_expression()?,
+                TokenKind::With => self.parse_with_expression()?,
+                TokenKind::New => self.parse_new_expression()?,
+                TokenKind::Lambda => self.parse_lambda_expression()?,
+                TokenKind::LeftBrace => {
+                    Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
+                }
+                _ => {
+                    return Err(SyntaxError::UnexpectedTokenIn(
+                        self.consume(),
+                        ort,
+                        self.loc.clone(),
+                    )
+                    .into())
+                }
             }
         };
 
@@ -209,7 +213,7 @@ impl Parser {
             | BinaryOperator::GreaterThan
             | BinaryOperator::LessEqual
             | BinaryOperator::LessThan => (3, 4),
-            BinaryOperator::Concatenate => todo!(),
+            BinaryOperator::Concatenate => (5, 6),
         }
     }
 
