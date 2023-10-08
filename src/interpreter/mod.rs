@@ -1,6 +1,7 @@
 pub(self) mod instrinsics;
-mod interpreter;
+pub(self) mod interpreter;
+pub(self) mod runtime;
 
 pub use interpreter::Interpreter;
-pub use interpreter::RuntimeType;
-pub use interpreter::RuntimeValue;
+pub use runtime::RuntimeType;
+pub use runtime::RuntimeValue;

@@ -1,6 +1,6 @@
 use crate::error::{Error, RuntimeError};
 
-use super::interpreter::RuntimeValue;
+use super::RuntimeValue;
 
 #[derive(Debug)]
 pub enum IntrinsicFunction {
