@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum Construct {
-    AstNode,
+    TopLevel,
     BlockScope,
     Statement,
     Var,
@@ -31,7 +31,7 @@ pub enum Construct {
 
 #[derive(Debug, Default)]
 pub struct Ast {
-    nodes: Vec<AstNode>,
+    pub nodes: Vec<AstNode>,
 }
 impl Deref for Ast {
     type Target = Vec<AstNode>;
@@ -145,7 +145,7 @@ impl Display for Construct {
             f,
             "{}",
             match self {
-                Self::AstNode => "Ast Node",
+                Self::TopLevel => "Top Level Program",
                 Self::BlockScope => "Scoped Block",
                 Self::Statement => "Statement",
                 Self::Let => "Let Declaration",

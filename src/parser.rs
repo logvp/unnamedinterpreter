@@ -20,12 +20,21 @@ impl Parser {
     }
 
     pub fn gen_ast(&mut self) -> Result<Ast, Error> {
-        let mut ast = Ast::default();
-        while !matches!(self.token(), TokenKind::Eof) {
+        self.parse_ast_nodes(TokenKind::Eof, Construct::TopLevel)
+            .map(|x| Ast { nodes: x })
+    }
+
+    fn parse_ast_nodes(
+        &mut self,
+        delimiter: TokenKind,
+        ort: Construct,
+    ) -> Result<Vec<AstNode>, Error> {
+        let mut ast: Vec<AstNode> = Default::default();
+        while !delimiter.kind_eq(self.token()) {
             let node = self.parse_ast_node()?;
             match node {
                 AstNode::Statement(_) => ast.push(node),
-                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::Eof) => {
+                AstNode::Expression(expr) if !delimiter.kind_eq(self.token()) => {
                     self.expect_semicolon()?;
                     ast.push(AstNode::Statement(Statement::Expression(expr)))
                 }
@@ -36,13 +45,10 @@ impl Parser {
             }
         }
 
-        if let TokenKind::Eof = self.consume() {
+        if delimiter.kind_eq(&self.consume()) {
             Ok(ast)
         } else {
-            Err(
-                SyntaxError::ExpressionMayOnlyComeAtEndIn(Construct::AstNode, self.loc.clone())
-                    .into(),
-            )
+            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
         }
     }
 
@@ -90,11 +96,11 @@ impl Parser {
             }
             TokenKind::Set => {
                 self.consume();
-                let lvalue = self.parse_lvalue(Construct::Set)?;
+                let lvalue = self.parse_identifier(Construct::Set)?;
                 let equal = self.consume();
                 if let TokenKind::Equal = equal {
                     Some(Statement::Assignment(
-                        lvalue,
+                        Lvalue::Identifier(lvalue),
                         self.parse_expression(Construct::Set)?,
                     ))
                 } else {
@@ -119,11 +125,11 @@ impl Parser {
             }
             // TODO: Only checks for identifier not for Lvalue
             TokenKind::Identifier(_) if matches!(self.peek(), TokenKind::Equal) => {
-                let lvalue = self.parse_lvalue(Construct::SimpleAssignment)?;
+                let lvalue = self.parse_identifier(Construct::SimpleAssignment)?;
                 // consume `=`
                 self.consume();
                 Some(Statement::Assignment(
-                    lvalue,
+                    Lvalue::Identifier(lvalue),
                     self.parse_expression(Construct::SimpleAssignment)?,
                 ))
             }
@@ -256,27 +262,8 @@ impl Parser {
 
     fn parse_braced_block(&mut self, ort: Construct) -> Result<Block, Error> {
         self.expect(TokenKind::LeftBrace, ort)?;
-        let mut block: Vec<AstNode> = Default::default();
-        while !matches!(self.token(), TokenKind::RightBrace) {
-            let node = self.parse_ast_node()?;
-            match node {
-                AstNode::Statement(_) => block.push(node),
-                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::RightBrace) => {
-                    self.expect_semicolon()?;
-                    block.push(AstNode::Statement(Statement::Expression(expr)))
-                }
-                AstNode::Expression(_) => {
-                    block.push(node);
-                    break;
-                }
-            }
-        }
-
-        if let TokenKind::RightBrace = self.consume() {
-            Ok(Block(block.into()))
-        } else {
-            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
-        }
+        let block = self.parse_ast_nodes(TokenKind::RightBrace, ort)?;
+        Ok(Block(block.into()))
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, Error> {
@@ -359,10 +346,6 @@ impl Parser {
         }
         self.expect(TokenKind::RightParen, ORT)?;
         Ok(args.into())
-    }
-
-    fn parse_lvalue(&mut self, ort: Construct) -> Result<Lvalue, Error> {
-        Ok(Lvalue::Identifier(self.parse_identifier(ort)?))
     }
 
     fn parse_identifier(&mut self, ort: Construct) -> Result<Identifier, Error> {
