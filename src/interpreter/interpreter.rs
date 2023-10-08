@@ -192,12 +192,12 @@ fn do_binary_operation(
 }
 
 fn do_unary_operation(
-    op: UnaryOperator,
+    op: PrefixOperator,
     erand: &Expression,
     ctx: Rc<Context>,
 ) -> Result<RuntimeValue, Error> {
     match op {
-        UnaryOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
+        PrefixOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
     }
 }
 

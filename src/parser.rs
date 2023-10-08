@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::ast::{
-    Ast, AstNode, BinaryOperator, Block, Construct, Expression, Identifier, Lvalue, Statement,
-    UnaryOperator,
+    Ast, AstNode, BinaryOperator, Block, Construct, Expression, Identifier, Lvalue, PrefixOperator,
+    Statement,
 };
 use crate::error::{Error, Loc, SyntaxError};
 use crate::lexer::{Lexer, Token, TokenKind};
@@ -145,102 +145,108 @@ impl Parser {
     }
 
     fn parse_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
-        Ok(match self.token() {
+        self.parse_expression_rec(0, ort)
+    }
+
+    // Expression parser based on https://github.com/matklad/minipratt
+    fn parse_expression_rec(&mut self, min_pow: u8, ort: Construct) -> Result<Expression, Error> {
+        let mut lhs = match self.token() {
+            TokenKind::Literal(_) => {
+                let TokenKind::Literal(x) = self.consume() else {unreachable!() };
+                Expression::Literal(x)
+            }
+            TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
+            TokenKind::LeftParen => self.parse_parenthetical_expression(ort)?,
+            token if Self::convert_prefix_operator(&token).is_some() => {
+                let unop = Self::convert_prefix_operator(&self.consume()).unwrap();
+                let r_pow = Self::prefix_power(unop);
+                let rhs = self.parse_expression_rec(r_pow, ort)?;
+                Expression::Unary(unop, Box::new(rhs))
+            }
             TokenKind::If => self.parse_if_expression()?,
-            TokenKind::While => {
-                self.consume();
-                let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
-                let body = self.parse_braced_block(Construct::WhileBody)?;
-                Expression::While(Box::new(cond), body)
-            }
-            TokenKind::With => {
-                self.consume();
-                let object = self.parse_parenthetical_expression(Construct::With)?;
-                let body = self.parse_braced_block(Construct::With)?;
-                Expression::With(Box::new(object), body)
-            }
-            TokenKind::New => {
-                self.consume();
-                let body = self.parse_braced_block(Construct::NewBlock)?;
-                Expression::New(body)
-            }
-            _ => {
-                let lhs = self.parse_term(ort)?;
-                let op = match self.token() {
-                    TokenKind::Plus => BinaryOperator::Add,
-                    TokenKind::Minus => BinaryOperator::Subtract,
-                    TokenKind::EqualEqual => BinaryOperator::Equal,
-                    TokenKind::LessEqual => BinaryOperator::LessEqual,
-                    TokenKind::LeftAngle => BinaryOperator::LessThan,
-                    TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
-                    TokenKind::RightAngle => BinaryOperator::GreaterThan,
-                    TokenKind::SlashEqual => BinaryOperator::NotEqual,
-                    _ => return Ok(lhs),
-                };
-                self.consume();
-                Expression::Binary(op, Box::new(lhs), Box::new(self.parse_expression(ort)?))
-            }
-        })
-    }
-
-    fn parse_term(&mut self, ort: Construct) -> Result<Expression, Error> {
-        let lhs = self.parse_factor(ort)?;
-        let op = match self.token() {
-            TokenKind::Star => BinaryOperator::Multiply,
-            TokenKind::Slash => BinaryOperator::Divide,
-            TokenKind::PlusPlus => BinaryOperator::Concatenate,
-            _ => return Ok(lhs),
-        };
-
-        self.consume();
-        Ok(Expression::Binary(
-            op,
-            Box::new(lhs),
-            Box::new(self.parse_term(ort)?),
-        ))
-    }
-
-    fn parse_factor(&mut self, ort: Construct) -> Result<Expression, Error> {
-        let factor = match self.token() {
+            TokenKind::While => self.parse_while_expression()?,
+            TokenKind::With => self.parse_with_expression()?,
+            TokenKind::New => self.parse_new_expression()?,
             TokenKind::Lambda => self.parse_lambda_expression()?,
-            TokenKind::LeftParen => self.parse_parenthetical_expression(Construct::Expression)?,
-
             TokenKind::LeftBrace => {
                 Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
             }
-            TokenKind::Minus => {
-                self.consume();
-                Expression::Unary(UnaryOperator::Negate, Box::new(self.parse_factor(ort)?))
-            }
-            TokenKind::Literal(literal) => {
-                let literal = literal.to_owned();
-                self.consume();
-                Expression::Literal(literal)
-            }
-            TokenKind::Identifier(name) => {
-                let name = name.to_owned();
-                self.consume();
-                Expression::Variable(Identifier { name })
-            }
             _ => {
-                let tok = self.consume();
-                return Err(SyntaxError::UnexpectedTokenIn(tok, ort, self.loc.clone()).into());
+                return Err(
+                    SyntaxError::UnexpectedTokenIn(self.consume(), ort, self.loc.clone()).into(),
+                )
             }
         };
-        if let TokenKind::LeftParen = self.token() {
-            self.parse_function_call(factor)
-        } else {
-            Ok(factor)
+
+        loop {
+            if let TokenKind::LeftParen = self.token() {
+                let args = self.parse_function_args()?;
+                lhs = Expression::FunctionCall(Box::new(lhs), args);
+                continue;
+            }
+
+            let Some(op) = Self::convert_infix_operator(self.token()) else { break; };
+
+            let (l_pow, r_pow) = Self::infix_power(op);
+            if l_pow < min_pow {
+                break;
+            }
+
+            self.consume(); // chomp op
+            let rhs = self.parse_expression_rec(r_pow, ort)?;
+            lhs = Expression::Binary(op, Box::new(lhs), Box::new(rhs));
         }
+
+        Ok(lhs)
+    }
+
+    fn infix_power(op: BinaryOperator) -> (u8, u8) {
+        match op {
+            BinaryOperator::Add | BinaryOperator::Subtract => (5, 6),
+            BinaryOperator::Multiply | BinaryOperator::Divide => (9, 10),
+            BinaryOperator::Equal | BinaryOperator::NotEqual => (1, 2),
+            BinaryOperator::GreaterEqual
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::LessEqual
+            | BinaryOperator::LessThan => (3, 4),
+            BinaryOperator::Concatenate => todo!(),
+        }
+    }
+
+    fn prefix_power(op: PrefixOperator) -> u8 {
+        match op {
+            PrefixOperator::Negate => 15,
+        }
+    }
+
+    fn convert_infix_operator(token: &TokenKind) -> Option<BinaryOperator> {
+        Some(match token {
+            TokenKind::RightAngle => BinaryOperator::GreaterThan,
+            TokenKind::LeftAngle => BinaryOperator::LessThan,
+            TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
+            TokenKind::LessEqual => BinaryOperator::LessEqual,
+            TokenKind::EqualEqual => BinaryOperator::Equal,
+            TokenKind::SlashEqual => BinaryOperator::NotEqual,
+            TokenKind::Plus => BinaryOperator::Add,
+            TokenKind::Minus => BinaryOperator::Subtract,
+            TokenKind::Star => BinaryOperator::Multiply,
+            TokenKind::Slash => BinaryOperator::Divide,
+            TokenKind::PlusPlus => BinaryOperator::Concatenate,
+            _ => return None,
+        })
+    }
+
+    fn convert_prefix_operator(token: &TokenKind) -> Option<PrefixOperator> {
+        Some(match token {
+            TokenKind::Minus => PrefixOperator::Negate,
+            _ => return None,
+        })
     }
 
     fn parse_parenthetical_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
         self.expect(TokenKind::LeftParen, ort)?;
-
         let parenthesized = self.parse_expression(ort)?;
-
         self.expect(TokenKind::RightParen, ort)?;
-
         Ok(parenthesized)
     }
 
@@ -292,6 +298,26 @@ impl Parser {
         Ok(Expression::IfElse(Box::new(cond), body, else_))
     }
 
+    fn parse_while_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::While, Construct::WhileCondition)?;
+        let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
+        let body = self.parse_braced_block(Construct::WhileBody)?;
+        Ok(Expression::While(Box::new(cond), body))
+    }
+
+    fn parse_with_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::With, Construct::With)?;
+        let object = self.parse_parenthetical_expression(Construct::With)?;
+        let body = self.parse_braced_block(Construct::With)?;
+        Ok(Expression::With(Box::new(object), body))
+    }
+
+    fn parse_new_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::New, Construct::NewBlock)?;
+        let body = self.parse_braced_block(Construct::NewBlock)?;
+        Ok(Expression::New(body))
+    }
+
     fn parse_lambda_expression(&mut self) -> Result<Expression, Error> {
         self.expect(TokenKind::Lambda, Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
@@ -313,15 +339,6 @@ impl Parser {
         }
         self.expect(TokenKind::RightParen, ORT)?;
         Ok(params)
-    }
-
-    fn parse_function_call(&mut self, func: Expression) -> Result<Expression, Error> {
-        let call = Expression::FunctionCall(Box::new(func), self.parse_function_args()?);
-        if let TokenKind::LeftParen = self.token() {
-            self.parse_function_call(call)
-        } else {
-            Ok(call)
-        }
     }
 
     fn parse_function_args(&mut self) -> Result<Rc<[Expression]>, Error> {
