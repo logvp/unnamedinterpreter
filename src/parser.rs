@@ -57,80 +57,39 @@ impl Parser {
             TokenKind::Var => {
                 self.consume();
                 let identifier = self.parse_identifier(Construct::Var)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Declaration(
-                        identifier,
-                        self.parse_expression(Construct::Var)?,
-                        false,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Var,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                self.expect(TokenKind::Equal, Construct::Var)?;
+                Some(Statement::Declaration(
+                    identifier,
+                    self.parse_expression(Construct::Var)?,
+                    false,
+                ))
             }
             TokenKind::Let => {
                 self.consume();
                 let identifier = self.parse_identifier(Construct::Let)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Declaration(
-                        identifier,
-                        self.parse_expression(Construct::Let)?,
-                        true,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Var,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                self.expect(TokenKind::Equal, Construct::Let)?;
+                Some(Statement::Declaration(
+                    identifier,
+                    self.parse_expression(Construct::Let)?,
+                    true,
+                ))
             }
             TokenKind::Set => {
                 self.consume();
                 let lvalue = self.parse_identifier(Construct::Set)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Assignment(
-                        Lvalue::Identifier(lvalue),
-                        self.parse_expression(Construct::Set)?,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Set,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                self.expect(TokenKind::Equal, Construct::Set)?;
+                Some(Statement::Assignment(
+                    Lvalue::Identifier(lvalue),
+                    self.parse_expression(Construct::Set)?,
+                ))
             }
             TokenKind::Identifier(_) if matches!(self.peek(), &TokenKind::ColonEqual) => {
                 let identifier = self.parse_identifier(Construct::SimpleDeclaration)?;
-                // consume `:=`
-                self.consume();
+                self.expect(TokenKind::ColonEqual, Construct::SimpleDeclaration)?;
                 Some(Statement::Declaration(
                     identifier,
                     self.parse_expression(Construct::SimpleDeclaration)?,
                     false,
-                ))
-            }
-            // TODO: Only checks for identifier not for Lvalue
-            TokenKind::Identifier(_) if matches!(self.peek(), TokenKind::Equal) => {
-                let lvalue = self.parse_identifier(Construct::SimpleAssignment)?;
-                // consume `=`
-                self.consume();
-                Some(Statement::Assignment(
-                    Lvalue::Identifier(lvalue),
-                    self.parse_expression(Construct::SimpleAssignment)?,
                 ))
             }
             _ => None,
@@ -138,15 +97,27 @@ impl Parser {
             self.expect_semicolon()?;
             return Ok(AstNode::Statement(statement));
         }
-        // Let, Set, SimpleDeclaration, SimpleAssignment cases are covered
-        // Statement::Expression and Expression need to be handled
+        // Let, Set, SimpleDeclaration cases are covered
+        // SimpleAssignment, Statement::Expression, Expression need to be handled
+        let expression_loc = self.loc.clone();
         let expression = self.parse_expression(Construct::Expression)?;
 
-        if let TokenKind::Semicolon = self.token() {
-            self.consume();
-            Ok(AstNode::Statement(Statement::Expression(expression)))
-        } else {
-            Ok(AstNode::Expression(expression))
+        match self.token() {
+            TokenKind::Equal => {
+                self.consume();
+                let lvalue = match expression {
+                    Expression::Variable(id) => Lvalue::Identifier(id),
+                    _ => return Err(SyntaxError::AssignmentRequiresLvalue(expression_loc).into()),
+                };
+                let rvalue = self.parse_expression(Construct::SimpleAssignment)?;
+                self.expect_semicolon()?;
+                Ok(AstNode::Statement(Statement::Assignment(lvalue, rvalue)))
+            }
+            TokenKind::Semicolon => {
+                self.consume();
+                Ok(AstNode::Statement(Statement::Expression(expression)))
+            }
+            _ => Ok(AstNode::Expression(expression)),
         }
     }
 

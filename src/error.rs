@@ -87,6 +87,7 @@ pub enum SyntaxError {
     ExpectedTokenIn(lexer::TokenKind, lexer::TokenKind, Construct, Loc),
     UnexpectedTokenIn(lexer::TokenKind, Construct, Loc),
     ExpressionMayOnlyComeAtEndIn(Construct, Loc),
+    AssignmentRequiresLvalue(Loc),
 }
 
 #[derive(Debug)]
@@ -137,6 +138,12 @@ impl Display for SyntaxError {
             }
             Self::ExpressionMayOnlyComeAtEndIn(ort, loc) => {
                 write!(f, "{loc} Expression may only be in final position of {ort}")
+            }
+            Self::AssignmentRequiresLvalue(loc) => {
+                write!(
+                    f,
+                    "{loc} This expression does not resolve to a valid lvalue"
+                )
             }
         }
     }
