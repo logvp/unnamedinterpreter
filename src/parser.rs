@@ -169,6 +169,9 @@ impl Parser {
             let Some(op) = Self::convert_infix_operator(self.token()) else { break; };
 
             let (l_pow, r_pow) = Self::infix_power(op);
+            if l_pow == min_pow {
+                return Err(SyntaxError::ParenthesisRequired(op, ort, self.loc.clone()).into());
+            }
             if l_pow < min_pow {
                 break;
             }
@@ -181,15 +184,18 @@ impl Parser {
         Ok(lhs)
     }
 
+    // Higher number = higher precedence
+    // Equal left and right precedence means parenthesis are required
     fn infix_power(op: BinaryOperator) -> (u8, u8) {
         match op {
             BinaryOperator::Add | BinaryOperator::Subtract => (5, 6),
             BinaryOperator::Multiply | BinaryOperator::Divide => (9, 10),
-            BinaryOperator::Equal | BinaryOperator::NotEqual => (1, 2),
-            BinaryOperator::GreaterEqual
+            BinaryOperator::Equal
+            | BinaryOperator::NotEqual
+            | BinaryOperator::GreaterEqual
             | BinaryOperator::GreaterThan
             | BinaryOperator::LessEqual
-            | BinaryOperator::LessThan => (3, 4),
+            | BinaryOperator::LessThan => (3, 3),
             BinaryOperator::Concatenate => (5, 6),
         }
     }

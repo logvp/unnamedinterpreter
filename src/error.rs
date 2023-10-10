@@ -1,4 +1,4 @@
-use crate::ast::Construct;
+use crate::ast::{BinaryOperator, Construct};
 use crate::lexer;
 use std::fmt::Display;
 use std::rc::Rc;
@@ -88,6 +88,7 @@ pub enum SyntaxError {
     UnexpectedTokenIn(lexer::TokenKind, Construct, Loc),
     ExpressionMayOnlyComeAtEndIn(Construct, Loc),
     AssignmentRequiresLvalue(Loc),
+    ParenthesisRequired(BinaryOperator, Construct, Loc),
 }
 
 #[derive(Debug)]
@@ -144,6 +145,9 @@ impl Display for SyntaxError {
                     f,
                     "{loc} This expression does not resolve to a valid lvalue"
                 )
+            }
+            Self::ParenthesisRequired(op, _ort, loc) => {
+                write!(f, "{loc} Parenthesis are required around operator {op:?}",)
             }
         }
     }
