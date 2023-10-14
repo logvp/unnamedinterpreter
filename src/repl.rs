@@ -1,11 +1,11 @@
 use crate::error::Error;
-use crate::treewalk::{Interpreter, RuntimeValue};
+use crate::interpreter::Interpreter;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};
 
-pub struct Repl<I: BufRead, O: Write> {
-    interpreter: Interpreter,
+pub struct Repl<T: Interpreter, I: BufRead, O: Write> {
+    interpreter: T,
     input: I,
     output: O,
     macros: HashMap<String, String>,
@@ -15,10 +15,10 @@ pub struct Repl<I: BufRead, O: Write> {
     multiline: bool,
     recording: bool,
 }
-impl<I: BufRead, O: Write> Repl<I, O> {
+impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
     pub fn new(input: I, output: O) -> Self {
         Repl {
-            interpreter: Interpreter::new(),
+            interpreter: T::new(),
             input,
             output,
             macros: HashMap::new(),
@@ -145,10 +145,9 @@ impl<I: BufRead, O: Write> Repl<I, O> {
         Ok(true)
     }
 
-    fn print_results(output: &mut O, result: &[Result<RuntimeValue, Error>]) -> io::Result<()> {
+    fn print_results(output: &mut O, result: &[Result<T::ReplReturn, Error>]) -> io::Result<()> {
         for ret in result {
             match ret {
-                Ok(RuntimeValue::None) => (),
                 Ok(v) => writeln!(output, ": {}", v)?,
                 Err(e) => writeln!(output, ": ERROR : {}", e)?,
             }
@@ -157,25 +156,25 @@ impl<I: BufRead, O: Write> Repl<I, O> {
     }
 }
 
-pub fn init() -> io::Result<()> {
+pub fn init<T: Interpreter>() -> io::Result<()> {
     let stdin = io::stdin().lock();
     let stdout = io::stdout();
 
-    let mut repl = Repl::new(stdin, stdout);
+    let mut repl = Repl::<T, _, _>::new(stdin, stdout);
     repl.start()?;
     Ok(())
 }
 
-pub fn run_file<P: AsRef<std::path::Path>>(
+pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
     path: &P,
-) -> io::Result<Vec<Result<RuntimeValue, Error>>> {
+) -> io::Result<Vec<Result<T::ReplReturn, Error>>> {
     let content = std::fs::read_to_string(path)?;
-    Ok(Interpreter::new().interpret(&content, path.as_ref().to_str().map(|name| name.into())))
+    Ok(T::new().interpret(&content, path.as_ref().to_str().map(|name| name.into())))
 }
 
-pub fn run_and_print_file<P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
-    if let Ok(result) = run_file(path) {
-        Repl::<io::StdinLock, io::Stdout>::print_results(&mut io::stdout(), &result)
+pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
+    if let Ok(result) = run_file::<T, P>(path) {
+        Repl::<T, io::StdinLock, _>::print_results(&mut io::stdout(), &result)
     } else {
         eprintln!(
             "Could not open file '{}'",

@@ -3,24 +3,25 @@ use std::rc::Rc;
 
 use crate::ast::*;
 use crate::error::{Error, RuntimeError};
+use crate::interpreter::Interpreter;
 use crate::parser::Parser;
 
 use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
 use super::{RuntimeType, RuntimeValue};
 
-pub struct Interpreter {
+pub struct TreeWalkInterpreter {
     context: Rc<Context>,
 }
-impl Interpreter {
-    pub fn new() -> Self {
-        Interpreter {
+impl Interpreter for TreeWalkInterpreter {
+    type ReplReturn = RuntimeValue;
+
+    fn new() -> Self {
+        TreeWalkInterpreter {
             context: Rc::new(Context::init_global()),
         }
     }
-    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
-        node.eval(Rc::clone(&self.context))
-    }
-    pub fn interpret(
+
+    fn interpret(
         &mut self,
         text: &str,
         filename: Option<Rc<str>>,
@@ -45,6 +46,11 @@ impl Interpreter {
             Err(e) => ret.push(Err(e)),
         }
         ret
+    }
+}
+impl TreeWalkInterpreter {
+    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
+        node.eval(Rc::clone(&self.context))
     }
 }
 
