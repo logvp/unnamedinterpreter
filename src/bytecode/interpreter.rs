@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{error::Error, interpreter::Interpreter};
+use crate::{error::Error, interpreter::Interpreter, parser::Parser};
 
 use super::{
+    compiler::BytecodeCompiler,
     instruction::{Instruction, Source},
     value::Value,
 };
@@ -72,10 +73,36 @@ impl Interpreter for BytecodeInterpreter {
 
     fn interpret(
         &mut self,
-        _text: &str,
-        _filename: Option<std::rc::Rc<str>>,
+        text: &str,
+        filename: Option<std::rc::Rc<str>>,
     ) -> Vec<Result<Self::ReplReturn, Error>> {
-        todo!()
+        let mut ret: Vec<Result<_, Error>> = Default::default();
+        let mut parser = {
+            match Parser::new(text, filename) {
+                Ok(parser) => parser,
+                Err(e) => {
+                    ret.push(Err(e));
+                    return ret;
+                }
+            }
+        };
+        let gen = parser.gen_ast();
+        let ast = match gen {
+            Ok(ast) => ast,
+            Err(e) => {
+                ret.push(Err(e));
+                return ret;
+            }
+        };
+        let bytecode = match BytecodeCompiler::gen_bytecode(ast) {
+            Ok(bytecode) => bytecode,
+            Err(e) => {
+                ret.push(Err(e));
+                return ret;
+            }
+        };
+        ret.push(self.interpret_bytecode(bytecode));
+        ret
     }
 }
 
@@ -92,7 +119,9 @@ impl BytecodeInterpreter {
     fn run_program(&mut self) -> Result<<Self as Interpreter>::ReplReturn, Error> {
         let vm = &mut self.vm;
         while vm.ip < self.program.len() {
+            println!("ip: {}; {:?}", vm.ip, &self.program[vm.ip]);
             match &self.program[vm.ip] {
+                Instruction::Nullary { src } => vm.result = vm.fetch(src).clone(),
                 Instruction::Binary { op, src0, src1 } => {
                     vm.result = Value::binary_operation(*op, vm.fetch(src0), vm.fetch(src1))?;
                 }

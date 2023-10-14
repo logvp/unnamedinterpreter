@@ -13,6 +13,9 @@ pub enum Source {
 
 #[derive(Debug)]
 pub enum Instruction {
+    Nullary {
+        src: Source,
+    },
     Binary {
         op: BinaryOperator,
         src0: Source,

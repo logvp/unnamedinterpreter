@@ -9,13 +9,14 @@ mod treewalk;
 
 use std::{env, io};
 
+use bytecode::interpreter::BytecodeInterpreter;
 #[cfg(test)]
 use interpreter::Interpreter;
 use treewalk::TreeWalkInterpreter;
 
-type InterpreterImpl = TreeWalkInterpreter;
+type InterpreterImpl = BytecodeInterpreter;
 
-fn main2() -> io::Result<()> {
+fn main() -> io::Result<()> {
     let filename = env::args().nth(1);
 
     if let Some(path) = filename {
@@ -25,7 +26,7 @@ fn main2() -> io::Result<()> {
     }
 }
 
-fn main() {
+fn main2() {
     bytecode::run_main()
 }
 
