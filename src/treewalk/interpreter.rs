@@ -3,11 +3,11 @@ use std::rc::Rc;
 
 use crate::ast::*;
 use crate::error::{Error, RuntimeError};
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, RuntimeType};
 use crate::parser::Parser;
 
 use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
-use super::{RuntimeType, RuntimeValue};
+use super::RuntimeValue;
 
 pub struct TreeWalkInterpreter {
     context: Rc<Context>,
@@ -198,12 +198,12 @@ fn do_binary_operation(
 }
 
 fn do_unary_operation(
-    op: PrefixOperator,
+    op: UnaryOperator,
     erand: &Expression,
     ctx: Rc<Context>,
 ) -> Result<RuntimeValue, Error> {
     match op {
-        PrefixOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
+        UnaryOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
     }
 }
 

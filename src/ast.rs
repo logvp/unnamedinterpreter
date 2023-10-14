@@ -89,14 +89,14 @@ pub enum BinaryOperator {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PrefixOperator {
+pub enum UnaryOperator {
     Negate,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
-    Unary(PrefixOperator, Box<Expression>),
+    Unary(UnaryOperator, Box<Expression>),
     IfElse(Box<Expression>, Block, Block),
     While(Box<Expression>, Block),
     With(Box<Expression>, Block),

@@ -1,4 +1,5 @@
 mod ast;
+mod bytecode;
 mod error;
 mod interpreter;
 mod lexer;
@@ -14,7 +15,7 @@ use treewalk::TreeWalkInterpreter;
 
 type InterpreterImpl = TreeWalkInterpreter;
 
-fn main() -> io::Result<()> {
+fn main2() -> io::Result<()> {
     let filename = env::args().nth(1);
 
     if let Some(path) = filename {
@@ -22,6 +23,10 @@ fn main() -> io::Result<()> {
     } else {
         repl::init::<InterpreterImpl>()
     }
+}
+
+fn main() {
+    bytecode::run_main()
 }
 
 #[cfg(test)]

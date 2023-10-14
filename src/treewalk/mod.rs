@@ -3,5 +3,4 @@ pub(self) mod interpreter;
 pub(self) mod runtime;
 
 pub use interpreter::TreeWalkInterpreter;
-pub use runtime::RuntimeType;
 pub use runtime::RuntimeValue;

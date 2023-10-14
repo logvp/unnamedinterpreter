@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::ast::{
-    Ast, AstNode, BinaryOperator, Block, Construct, Expression, Identifier, Lvalue, PrefixOperator,
-    Statement,
+    Ast, AstNode, BinaryOperator, Block, Construct, Expression, Identifier, Lvalue, Statement,
+    UnaryOperator,
 };
 use crate::error::{Error, Loc, SyntaxError};
 use crate::lexer::{Lexer, Token, TokenKind};
@@ -200,9 +200,9 @@ impl Parser {
         }
     }
 
-    fn prefix_power(op: PrefixOperator) -> u8 {
+    fn prefix_power(op: UnaryOperator) -> u8 {
         match op {
-            PrefixOperator::Negate => 15,
+            UnaryOperator::Negate => 15,
         }
     }
 
@@ -223,9 +223,9 @@ impl Parser {
         })
     }
 
-    fn convert_prefix_operator(token: &TokenKind) -> Option<PrefixOperator> {
+    fn convert_prefix_operator(token: &TokenKind) -> Option<UnaryOperator> {
         Some(match token {
-            TokenKind::Minus => PrefixOperator::Negate,
+            TokenKind::Minus => UnaryOperator::Negate,
             _ => return None,
         })
     }

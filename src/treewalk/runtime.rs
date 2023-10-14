@@ -8,6 +8,7 @@ use std::{
 use crate::{
     ast::{Block, Identifier},
     error::RuntimeError,
+    interpreter::RuntimeType,
 };
 
 use super::instrinsics::IntrinsicFunction;
@@ -20,32 +21,6 @@ pub enum RuntimeValue {
     String(String),
     Boolean(bool),
     None,
-}
-
-#[derive(Debug)]
-pub enum RuntimeType {
-    Object,
-    Function,
-    Integer,
-    String,
-    Boolean,
-    None,
-}
-impl Display for RuntimeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Object => "Object",
-                Self::Function => "Function",
-                Self::Integer => "Integer",
-                Self::String => "String",
-                Self::Boolean => "Boolean",
-                Self::None => "NoneType",
-            }
-        )
-    }
 }
 
 impl Display for RuntimeValue {
