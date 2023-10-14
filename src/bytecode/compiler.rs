@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
@@ -10,18 +10,27 @@ use super::{
     value::Value,
 };
 
+pub struct Program {
+    pub instructions: Vec<Instruction>,
+    pub global_consts: HashSet<String>,
+}
+
 #[derive(Default)]
 pub struct BytecodeCompiler {
     program: Vec<Instruction>,
     scopes: Vec<HashMap<String, (bool, usize)>>,
+    global_consts: HashSet<String>,
 }
 impl BytecodeCompiler {
-    pub fn gen_bytecode(ast: Ast) -> Result<Vec<Instruction>, Error> {
+    pub fn compile_bytecode(ast: Ast) -> Result<Program, Error> {
         let mut compiler = Self::default();
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
-        Ok(compiler.program)
+        Ok(Program {
+            instructions: compiler.program,
+            global_consts: compiler.global_consts,
+        })
     }
 
     fn resolve(&self, name: &str) -> (bool, Source) {
@@ -43,6 +52,9 @@ impl BytecodeCompiler {
             };
             Source::Local(index)
         } else {
+            if is_const {
+                self.global_consts.insert(name.to_owned());
+            }
             Source::Global(name.to_owned())
         }
     }
@@ -63,16 +75,18 @@ impl BytecodeCompiler {
                 };
                 self.compile_expr(expr)?;
                 self.program.push(Instruction::Store { dest });
-                Ok(())
             }
             Statement::Declaration(ident, expr, is_const) => {
                 let dest = self.declare(&ident.name, *is_const);
                 self.compile_expr(expr)?;
                 self.program.push(Instruction::Store { dest });
-                Ok(())
             }
-            Statement::Expression(expr) => self.compile_expr(expr),
+            Statement::Expression(expr) => self.compile_expr(expr)?,
         }
+        self.program.push(Instruction::Nullary {
+            src: Source::Immediate(Value::None),
+        });
+        Ok(())
     }
 
     fn compile_expr(&mut self, expr: &Expression) -> Result<(), Error> {
@@ -91,10 +105,13 @@ impl BytecodeCompiler {
                     Expression::Variable(ident) => self.resolve(&ident.name).1,
                     expr => {
                         // save lhs
+                        if !matches!(src0, Source::Result) {
+                            self.program.push(Instruction::Nullary { src: src0 });
+                        }
                         self.program.push(Instruction::Store {
-                            dest: Source::Temporary,
+                            dest: Source::Stack,
                         });
-                        src0 = Source::Temporary;
+                        src0 = Source::Stack;
                         self.compile_expr(expr)?;
                         Source::Result
                     }
@@ -103,6 +120,14 @@ impl BytecodeCompiler {
                     op: *op,
                     src0,
                     src1,
+                });
+                Ok(())
+            }
+            Expression::Unary(op, lhs) => {
+                self.compile_expr(lhs)?;
+                self.program.push(Instruction::Unary {
+                    op: *op,
+                    src0: Source::Result,
                 });
                 Ok(())
             }

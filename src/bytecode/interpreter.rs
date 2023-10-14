@@ -1,9 +1,16 @@
-use std::collections::HashMap;
+use std::{
+    cell::Cell,
+    collections::{HashMap, HashSet},
+};
 
-use crate::{error::Error, interpreter::Interpreter, parser::Parser};
+use crate::{
+    error::{Error, RuntimeError},
+    interpreter::Interpreter,
+    parser::Parser,
+};
 
 use super::{
-    compiler::BytecodeCompiler,
+    compiler::{BytecodeCompiler, Program},
     instruction::{Instruction, Source},
     value::Value,
 };
@@ -18,39 +25,75 @@ pub struct BytecodeInterpreter {
 struct VirtualMachine {
     ip: usize,
     result: Value,
-    temporary: Vec<Value>,
+    stack_p: Cell<usize>,
+    stack: Vec<Value>,
     local: Vec<Value>,
-    global: HashMap<String, Value>,
+    globals: HashMap<String, Value>,
+    global_consts: HashSet<String>,
 }
 impl VirtualMachine {
-    fn fetch(&mut self, location: &Source) -> Value {
-        match location {
-            Source::Result => self.result.clone(),
-            Source::Immediate(imm) => imm.clone(),
-            Source::Local(index) => self
-                .local
-                .get(*index)
-                .expect(
-                    "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-                )
-                .clone(),
-            Source::Temporary => self.temporary.pop().unwrap(),
-            x => todo!("Fetching from {:?} is not implemented", x),
-        }
+    fn push_stack_p(&self) -> usize {
+        let index = self.stack_p.get();
+        self.stack_p.set(index + 1);
+        index
     }
 
-    fn store(&mut self, location: &Source) {
+    fn pop_stack_p(&self) -> usize {
+        let index = self.stack_p.get() - 1;
+        self.stack_p.set(index);
+        index
+    }
+
+    fn fetch<'a>(&'a self, location: &'a Source) -> Result<&'a Value, Error> {
+        Ok(match location {
+            Source::Result => &self.result,
+            Source::Immediate(imm) => imm,
+            Source::Local(index) => {
+                let index = self.local.len() - index - 1;
+                self.local.get(index).expect(
+                    "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
+                )
+            }
+            Source::Stack => self.stack.get(self.pop_stack_p()).unwrap(),
+            Source::Global(name) => match self.globals.get(name) {
+                Some(value) => value,
+                None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
+            },
+        })
+    }
+
+    fn store(&mut self, location: &Source) -> Result<(), Error> {
         match location {
             Source::Result => {}
             Source::Immediate(_) => panic!("Cannot store to immediate value"),
             Source::Local(index) => {
-                *self.local.get_mut(*index).expect(
+                let index = self.local.len() - index - 1;
+                *self.local.get_mut(index).expect(
                     "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
                 ) = self.result.clone()
             }
-            Source::Temporary => self.temporary.push(self.result.clone()),
-            x => todo!("Storing to {:?} is not implemented", x),
-        }
+            Source::Stack => {
+                let index = self.push_stack_p();
+                if index == self.stack.len() {
+                    self.stack.push(self.result.clone());
+                } else {
+                    self.stack[index] = self.result.clone();
+                }
+            }
+            Source::Global(name) => match self.globals.get(name) {
+                None => {
+                    self.globals.insert(name.clone(), self.result.clone());
+                }
+                Some(_) => {
+                    if self.global_consts.contains(name) {
+                        return Err(RuntimeError::ConstReassignment(name.to_owned()).into());
+                    } else {
+                        self.globals.insert(name.clone(), self.result.clone());
+                    }
+                }
+            },
+        };
+        Ok(())
     }
 
     fn alloc_locals(&mut self, num: usize) {
@@ -100,8 +143,14 @@ impl Interpreter for BytecodeInterpreter {
                 return ret;
             }
         };
-        let bytecode = match BytecodeCompiler::gen_bytecode(ast) {
-            Ok(bytecode) => bytecode,
+        let bytecode = match BytecodeCompiler::compile_bytecode(ast) {
+            Ok(Program {
+                instructions,
+                global_consts,
+            }) => {
+                self.vm.global_consts.extend(global_consts);
+                instructions
+            }
             Err(e) => {
                 ret.push(Err(e));
                 return ret;
@@ -127,12 +176,12 @@ impl BytecodeInterpreter {
         while vm.ip < self.program.len() {
             println!("ip: {}; {:?}", vm.ip, &self.program[vm.ip]);
             match &self.program[vm.ip] {
-                Instruction::Nullary { src } => vm.result = vm.fetch(src).clone(),
+                Instruction::Nullary { src } => vm.result = vm.fetch(src)?.clone(),
                 Instruction::Binary { op, src0, src1 } => {
-                    vm.result = Value::binary_operation(*op, &vm.fetch(src0), &vm.fetch(src1))?;
+                    vm.result = Value::binary_operation(*op, vm.fetch(src0)?, vm.fetch(src1)?)?;
                 }
                 Instruction::Unary { op, src0 } => {
-                    vm.result = Value::unary_operation(*op, &vm.fetch(src0))?;
+                    vm.result = Value::unary_operation(*op, vm.fetch(src0)?)?;
                 }
                 Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
                 Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),
@@ -152,8 +201,8 @@ impl BytecodeInterpreter {
                     vm.jmp(*jump_dest);
                     continue;
                 }
+                Instruction::Store { dest } => vm.store(dest)?,
                 Instruction::Noop => {}
-                Instruction::Store { dest } => vm.store(dest),
             }
             vm.ip += 1;
         }

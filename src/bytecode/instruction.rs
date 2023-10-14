@@ -6,13 +6,14 @@ use super::value::Value;
 pub enum Source {
     Immediate(Value),
     Result,
-    Temporary,
+    Stack,
     Local(usize),
     Global(String),
 }
 
 #[derive(Debug)]
 pub enum Instruction {
+    // Load src to Result
     Nullary {
         src: Source,
     },
@@ -43,8 +44,9 @@ pub enum Instruction {
     DestroyScope {
         locals: usize,
     },
-    Noop,
+    // Store Result to dest
     Store {
         dest: Source,
     },
+    Noop,
 }

@@ -12,7 +12,6 @@ use std::{env, io};
 use bytecode::interpreter::BytecodeInterpreter;
 #[cfg(test)]
 use interpreter::Interpreter;
-use treewalk::TreeWalkInterpreter;
 
 type InterpreterImpl = BytecodeInterpreter;
 
@@ -24,10 +23,6 @@ fn main() -> io::Result<()> {
     } else {
         repl::init::<InterpreterImpl>()
     }
-}
-
-fn main2() {
-    bytecode::run_main()
 }
 
 #[cfg(test)]
