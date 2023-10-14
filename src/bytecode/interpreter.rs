@@ -23,13 +23,18 @@ struct VirtualMachine {
     global: HashMap<String, Value>,
 }
 impl VirtualMachine {
-    fn fetch<'a>(&'a self, location: &'a Source) -> &'a Value {
+    fn fetch(&mut self, location: &Source) -> Value {
         match location {
-            Source::Result => &self.result,
-            Source::Immediate(imm) => imm,
-            Source::Local(index) => self.local.get(*index).expect(
-                "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-            ),
+            Source::Result => self.result.clone(),
+            Source::Immediate(imm) => imm.clone(),
+            Source::Local(index) => self
+                .local
+                .get(*index)
+                .expect(
+                    "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
+                )
+                .clone(),
+            Source::Temporary => self.temporary.pop().unwrap(),
             x => todo!("Fetching from {:?} is not implemented", x),
         }
     }
@@ -43,6 +48,7 @@ impl VirtualMachine {
                     "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
                 ) = self.result.clone()
             }
+            Source::Temporary => self.temporary.push(self.result.clone()),
             x => todo!("Storing to {:?} is not implemented", x),
         }
     }
@@ -123,10 +129,10 @@ impl BytecodeInterpreter {
             match &self.program[vm.ip] {
                 Instruction::Nullary { src } => vm.result = vm.fetch(src).clone(),
                 Instruction::Binary { op, src0, src1 } => {
-                    vm.result = Value::binary_operation(*op, vm.fetch(src0), vm.fetch(src1))?;
+                    vm.result = Value::binary_operation(*op, &vm.fetch(src0), &vm.fetch(src1))?;
                 }
                 Instruction::Unary { op, src0 } => {
-                    vm.result = Value::unary_operation(*op, vm.fetch(src0))?;
+                    vm.result = Value::unary_operation(*op, &vm.fetch(src0))?;
                 }
                 Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
                 Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),

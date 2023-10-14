@@ -78,15 +78,26 @@ impl BytecodeCompiler {
     fn compile_expr(&mut self, expr: &Expression) -> Result<(), Error> {
         match expr {
             Expression::Binary(op, lhs, rhs) => {
-                let src0 = match lhs.as_ref() {
+                let mut src0 = match lhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal.clone())),
                     Expression::Variable(ident) => self.resolve(&ident.name).1,
-                    _ => todo!(),
+                    expr => {
+                        self.compile_expr(expr)?;
+                        Source::Result
+                    }
                 };
                 let src1 = match rhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal.clone())),
                     Expression::Variable(ident) => self.resolve(&ident.name).1,
-                    _ => todo!(),
+                    expr => {
+                        // save lhs
+                        self.program.push(Instruction::Store {
+                            dest: Source::Temporary,
+                        });
+                        src0 = Source::Temporary;
+                        self.compile_expr(expr)?;
+                        Source::Result
+                    }
                 };
                 self.program.push(Instruction::Binary {
                     op: *op,

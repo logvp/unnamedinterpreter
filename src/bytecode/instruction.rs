@@ -2,11 +2,11 @@ use crate::ast::{BinaryOperator, UnaryOperator};
 
 use super::value::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Source {
     Immediate(Value),
     Result,
-    Temporary(usize),
+    Temporary,
     Local(usize),
     Global(String),
 }
