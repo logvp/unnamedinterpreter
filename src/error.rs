@@ -3,7 +3,7 @@ use crate::lexer;
 use std::fmt::Display;
 use std::rc::Rc;
 
-pub use crate::interpreter::RuntimeType;
+pub use crate::treewalk::RuntimeType;
 
 #[derive(Debug, Clone)]
 pub struct Loc {

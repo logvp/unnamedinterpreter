@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::interpreter::{Interpreter, RuntimeValue};
+use crate::treewalk::{Interpreter, RuntimeValue};
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};

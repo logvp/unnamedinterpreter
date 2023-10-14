@@ -1,9 +1,9 @@
 mod ast;
 mod error;
-mod interpreter;
 mod lexer;
 mod parser;
 mod repl;
+mod treewalk;
 
 use std::{env, io};
 
@@ -49,7 +49,7 @@ fn parser() {
 
 #[test]
 fn interpreter() {
-    for result in interpreter::Interpreter::new().interpret(PROGRAM, None) {
+    for result in treewalk::Interpreter::new().interpret(PROGRAM, None) {
         result.unwrap();
     }
 }
