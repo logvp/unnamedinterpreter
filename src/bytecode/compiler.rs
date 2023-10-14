@@ -59,6 +59,18 @@ impl BytecodeCompiler {
         }
     }
 
+    fn push_instruction(&mut self, instr: Instruction) {
+        self.program.push(instr)
+    }
+
+    fn patch_instruction(&mut self, index: usize, instr: Instruction) {
+        self.program[index] = instr;
+    }
+
+    fn instruction_index(&self) -> usize {
+        self.program.len()
+    }
+
     fn compile_node(&mut self, node: &AstNode) -> Result<(), Error> {
         match node {
             AstNode::Expression(expr) => self.compile_expr(expr),
@@ -74,16 +86,16 @@ impl BytecodeCompiler {
                     return Err(RuntimeError::ConstReassignment(lvalue.name().unwrap().to_owned()).into())
                 };
                 self.compile_expr(expr)?;
-                self.program.push(Instruction::Store { dest });
+                self.push_instruction(Instruction::Store { dest });
             }
             Statement::Declaration(ident, expr, is_const) => {
                 let dest = self.declare(&ident.name, *is_const);
                 self.compile_expr(expr)?;
-                self.program.push(Instruction::Store { dest });
+                self.push_instruction(Instruction::Store { dest });
             }
             Statement::Expression(expr) => self.compile_expr(expr)?,
         }
-        self.program.push(Instruction::Nullary {
+        self.push_instruction(Instruction::Nullary {
             src: Source::Immediate(Value::None),
         });
         Ok(())
@@ -106,9 +118,9 @@ impl BytecodeCompiler {
                     expr => {
                         // save lhs
                         if !matches!(src0, Source::Result) {
-                            self.program.push(Instruction::Nullary { src: src0 });
+                            self.push_instruction(Instruction::Nullary { src: src0 });
                         }
-                        self.program.push(Instruction::Store {
+                        self.push_instruction(Instruction::Store {
                             dest: Source::Stack,
                         });
                         src0 = Source::Stack;
@@ -116,7 +128,7 @@ impl BytecodeCompiler {
                         Source::Result
                     }
                 };
-                self.program.push(Instruction::Binary {
+                self.push_instruction(Instruction::Binary {
                     op: *op,
                     src0,
                     src1,
@@ -125,56 +137,65 @@ impl BytecodeCompiler {
             }
             Expression::Unary(op, lhs) => {
                 self.compile_expr(lhs)?;
-                self.program.push(Instruction::Unary {
+                self.push_instruction(Instruction::Unary {
                     op: *op,
                     src0: Source::Result,
                 });
                 Ok(())
             }
             Expression::Literal(literal) => {
-                self.program.push(Instruction::Nullary {
+                self.push_instruction(Instruction::Nullary {
                     src: Source::Immediate(Value::from(literal.clone())),
                 });
                 Ok(())
             }
             Expression::Variable(ident) => {
                 let (_, src) = self.resolve(&ident.name);
-                self.program.push(Instruction::Nullary { src });
+                self.push_instruction(Instruction::Nullary { src });
                 Ok(())
             }
             Expression::Block(block) => self.compile_block(block),
             Expression::IfElse(expr, if_block, else_block) => {
                 self.compile_expr(expr)?;
-                let begin_if_index = self.program.len();
-                self.program.push(Instruction::Noop);
+                let begin_if_index = self.instruction_index();
+                self.push_instruction(Instruction::Noop);
                 self.compile_block(if_block)?;
-                let end_if_index = self.program.len();
-                self.program.push(Instruction::Noop);
+                let end_if_index = self.instruction_index();
+                self.push_instruction(Instruction::Noop);
                 self.compile_block(else_block)?;
-                let end_else_index = self.program.len();
+                let end_else_index = self.instruction_index();
 
-                self.program[begin_if_index] = Instruction::JumpFalse {
-                    jump_dest: end_if_index + 1,
-                };
-                self.program[end_if_index] = Instruction::UnconditionalJump {
-                    jump_dest: end_else_index,
-                };
+                self.patch_instruction(
+                    begin_if_index,
+                    Instruction::JumpFalse {
+                        jump_dest: end_if_index + 1,
+                    },
+                );
+                self.patch_instruction(
+                    end_if_index,
+                    Instruction::UnconditionalJump {
+                        jump_dest: end_else_index,
+                    },
+                );
                 Ok(())
             }
             Expression::While(expr, body) => {
-                let continue_index = self.program.len();
+                let continue_index = self.instruction_index();
                 self.compile_expr(expr)?;
-                let condition_jump_index = self.program.len();
-                self.program.push(Instruction::Noop);
+                let condition_jump_index = self.instruction_index();
+                self.push_instruction(Instruction::Noop);
                 self.compile_block(body)?;
-                self.program.push(Instruction::UnconditionalJump {
+                self.push_instruction(Instruction::UnconditionalJump {
                     jump_dest: continue_index,
                 });
-                let break_index = self.program.len();
+                let break_index = self.instruction_index();
 
-                self.program[condition_jump_index] = Instruction::JumpFalse {
-                    jump_dest: break_index,
-                };
+                self.patch_instruction(
+                    condition_jump_index,
+                    Instruction::JumpFalse {
+                        jump_dest: break_index,
+                    },
+                );
                 Ok(())
             }
             x => todo!("Compiling {:?} is not implemented yet", x),
@@ -185,14 +206,14 @@ impl BytecodeCompiler {
         let Block(nodes) = block;
         // new block = new scope
         self.scopes.push(Default::default());
-        let start_index = self.program.len();
-        self.program.push(Instruction::Noop); // Placeholder for CreateScope because number of locals is unknown
+        let start_index = self.instruction_index();
+        self.push_instruction(Instruction::Noop); // Placeholder for CreateScope because number of locals is unknown
         for node in nodes.iter() {
             self.compile_node(node)?;
         }
         let locals = self.scopes.last().unwrap().len();
-        self.program[start_index] = Instruction::CreateScope { locals };
-        self.program.push(Instruction::DestroyScope { locals });
+        self.patch_instruction(start_index, Instruction::CreateScope { locals });
+        self.push_instruction(Instruction::DestroyScope { locals });
         self.scopes.pop().unwrap(); // assert scope was still on stack
         Ok(())
     }
