@@ -8,9 +8,15 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+pub struct FunctionObject {
+    pub arity: usize,
+    pub code: usize,
+}
+
+#[derive(Clone, Debug)]
 pub enum Value {
     // Object(), TODO
-    // Function(), TODO
+    Function(FunctionObject),
     Integer(i32),
     String(String),
     Boolean(bool),
@@ -19,6 +25,7 @@ pub enum Value {
 impl Value {
     fn type_of(&self) -> RuntimeType {
         match self {
+            Value::Function { .. } => RuntimeType::Function,
             Value::Integer(_) => RuntimeType::Integer,
             Value::Boolean(_) => RuntimeType::Boolean,
             Value::String(_) => RuntimeType::String,
@@ -56,6 +63,16 @@ impl Value {
         }
     }
 
+    pub fn function(&self) -> Result<FunctionObject, RuntimeError> {
+        match self {
+            Value::Function(x) => Ok(x.clone()),
+            x => Err(RuntimeError::ExpectedButFound(
+                RuntimeType::Function,
+                x.type_of(),
+            )),
+        }
+    }
+
     pub fn binary_operation(
         op: BinaryOperator,
         a: &Value,
@@ -88,6 +105,9 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Function(FunctionObject { arity, code }) => {
+                write!(f, "lambda({}){{{}}}", arity, code)
+            }
             Self::Integer(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),
             Self::Boolean(boolean) => write!(f, "{}", boolean),

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
+    bytecode::value::FunctionObject,
     error::{Error, RuntimeError},
 };
 
@@ -11,24 +12,29 @@ use super::{
 };
 
 pub struct Program {
-    pub instructions: Vec<Instruction>,
+    pub instructions: Vec<Vec<Instruction>>,
     pub global_consts: HashSet<String>,
 }
 
-#[derive(Default)]
 pub struct BytecodeCompiler {
-    program: Vec<Instruction>,
+    chunks: Vec<Vec<Instruction>>,
+    chunk_index: Vec<usize>,
     scopes: Vec<HashMap<String, (bool, usize)>>,
     global_consts: HashSet<String>,
 }
 impl BytecodeCompiler {
     pub fn compile_bytecode(ast: Ast) -> Result<Program, Error> {
-        let mut compiler = Self::default();
+        let mut compiler = BytecodeCompiler {
+            chunks: vec![Default::default()],
+            chunk_index: vec![0],
+            scopes: Default::default(),
+            global_consts: Default::default(),
+        };
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
         Ok(Program {
-            instructions: compiler.program,
+            instructions: compiler.chunks,
             global_consts: compiler.global_consts,
         })
     }
@@ -59,16 +65,31 @@ impl BytecodeCompiler {
         }
     }
 
+    fn push_chunk(&mut self) -> usize {
+        self.scopes.push(Default::default());
+        let index = self.chunks.len();
+        self.chunks.push(Default::default());
+        self.chunk_index.push(index);
+        index
+    }
+
+    fn pop_chunk(&mut self) {
+        self.scopes.pop();
+        self.chunk_index
+            .pop()
+            .expect("Chunk stack should never be empty");
+    }
+
     fn push_instruction(&mut self, instr: Instruction) {
-        self.program.push(instr)
+        self.chunks[*self.chunk_index.last().unwrap()].push(instr)
     }
 
     fn patch_instruction(&mut self, index: usize, instr: Instruction) {
-        self.program[index] = instr;
+        self.chunks[*self.chunk_index.last().unwrap()][index] = instr;
     }
 
     fn instruction_index(&self) -> usize {
-        self.program.len()
+        self.chunks[*self.chunk_index.last().unwrap()].len()
     }
 
     fn compile_node(&mut self, node: &AstNode) -> Result<(), Error> {
@@ -196,6 +217,44 @@ impl BytecodeCompiler {
                         jump_dest: break_index,
                     },
                 );
+                Ok(())
+            }
+            Expression::FunctionCall(fun, arguments) => {
+                for arg in arguments.iter() {
+                    // evaluate arguments in order and push them onto the argument stack
+                    self.compile_expr(arg)?;
+                    self.push_instruction(Instruction::Store {
+                        dest: Source::Arguments,
+                    });
+                }
+
+                // call instruction with the function object in result
+                self.compile_expr(fun)?;
+                self.push_instruction(Instruction::Call);
+                Ok(())
+            }
+            Expression::Lambda(parameters, body) => {
+                // create a new compiler chunk to have a fresh state
+                let chunk_index = self.push_chunk();
+                self.push_instruction(Instruction::CreateScope {
+                    locals: parameters.len(),
+                });
+                for param in parameters.iter() {
+                    self.declare(&param.name, false);
+                }
+                self.push_instruction(Instruction::LoadArguments);
+                self.compile_block(body)?;
+                self.push_instruction(Instruction::DestroyScope {
+                    locals: parameters.len(),
+                });
+                self.pop_chunk();
+                // end the function compilation, now push the function object to the Result
+                self.push_instruction(Instruction::Nullary {
+                    src: Source::Immediate(Value::Function(FunctionObject {
+                        arity: parameters.len(),
+                        code: chunk_index,
+                    })),
+                });
                 Ok(())
             }
             x => todo!("Compiling {:?} is not implemented yet", x),

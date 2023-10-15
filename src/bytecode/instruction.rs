@@ -6,6 +6,7 @@ use super::value::Value;
 pub enum Source {
     Immediate(Value),
     Result,
+    Arguments,
     Stack,
     Local(usize),
     Global(String),
@@ -48,5 +49,8 @@ pub enum Instruction {
     Store {
         dest: Source,
     },
+    LoadArguments,
+    Call,
+    CallIntrinsic,
     Noop,
 }

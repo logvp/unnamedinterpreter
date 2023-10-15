@@ -17,7 +17,8 @@ use super::{
 
 #[derive(Default)]
 pub struct BytecodeInterpreter {
-    program: Vec<Instruction>,
+    chunks: Vec<Vec<Instruction>>,
+    call_stack: Vec<(usize, usize)>,
     vm: VirtualMachine,
 }
 
@@ -28,6 +29,7 @@ struct VirtualMachine {
     stack_p: Cell<usize>,
     stack: Vec<Value>,
     local: Vec<Value>,
+    arguments: Vec<Value>,
     globals: HashMap<String, Value>,
     global_consts: HashSet<String>,
 }
@@ -55,6 +57,7 @@ impl VirtualMachine {
                 )
             }
             Source::Stack => self.stack.get(self.pop_stack_p()).unwrap(),
+            Source::Arguments => unimplemented!(),
             Source::Global(name) => match self.globals.get(name) {
                 Some(value) => value,
                 None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
@@ -80,6 +83,7 @@ impl VirtualMachine {
                     self.stack[index] = self.result.clone();
                 }
             }
+            Source::Arguments => self.arguments.push(self.result.clone()),
             Source::Global(name) => match self.globals.get(name) {
                 None => {
                     self.globals.insert(name.clone(), self.result.clone());
@@ -94,6 +98,15 @@ impl VirtualMachine {
             },
         };
         Ok(())
+    }
+
+    fn load_arguments(&mut self) {
+        while self.arguments.len() != 0 {
+            let index = self.local.len() - self.arguments.len();
+            *self.local.get_mut(index).expect(
+                "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
+            ) = self.arguments.pop().unwrap()
+        }
     }
 
     fn alloc_locals(&mut self, num: usize) {
@@ -144,39 +157,60 @@ impl Interpreter for BytecodeInterpreter {
                 return ret;
             }
         };
-        let bytecode = match BytecodeCompiler::compile_bytecode(ast) {
-            Ok(Program {
-                instructions,
-                global_consts,
-            }) => {
-                self.vm.global_consts.extend(global_consts);
-                instructions
-            }
+        let program = match BytecodeCompiler::compile_bytecode(ast) {
+            Ok(program) => program,
             Err(e) => {
                 ret.push(Err(e));
                 return ret;
             }
         };
-        ret.push(self.interpret_bytecode(bytecode));
+        ret.push(self.run_program(program));
         ret
     }
 }
 
 impl BytecodeInterpreter {
-    pub fn interpret_bytecode(
+    pub fn run_program(
         &mut self,
-        program: Vec<Instruction>,
+        program: Program,
     ) -> Result<<Self as Interpreter>::ReplReturn, Error> {
-        self.program = program;
+        let Program {
+            instructions,
+            global_consts,
+        } = program;
+        self.vm.global_consts.extend(global_consts);
+        self.chunks = instructions;
+        self.call_stack.push((0, 0));
         self.vm.ip = 0;
-        self.run_program()
+        self.run()
     }
 
-    fn run_program(&mut self) -> Result<<Self as Interpreter>::ReplReturn, Error> {
+    fn run(&mut self) -> Result<<Self as Interpreter>::ReplReturn, Error> {
+        // for routine in self.chunks.iter() {
+        //     println!("Routine:");
+        //     for instr in routine.iter() {
+        //         println!("{:?}", instr);
+        //     }
+        //     println!();
+        // }
+        // return Ok(Value::None);
+
         let vm = &mut self.vm;
-        while vm.ip < self.program.len() {
-            println!("ip: {}; {:?}", vm.ip, &self.program[vm.ip]);
-            match &self.program[vm.ip] {
+        while let Some((_, routine_index)) = self.call_stack.last() {
+            let program = &self.chunks[*routine_index];
+            if vm.ip >= program.len() {
+                if let Some((ip, _)) = self.call_stack.pop() {
+                    vm.ip = ip;
+                    continue;
+                } else {
+                    break;
+                }
+            }
+            // println!(
+            //     "routine: {}; ip: {}; {:?}",
+            //     routine_index, vm.ip, program[vm.ip]
+            // );
+            match &program[vm.ip] {
                 Instruction::Nullary { src } => vm.result = vm.fetch(src)?.clone(),
                 Instruction::Binary { op, src0, src1 } => {
                     vm.result = Value::binary_operation(*op, vm.fetch(src0)?, vm.fetch(src1)?)?;
@@ -203,6 +237,21 @@ impl BytecodeInterpreter {
                     continue;
                 }
                 Instruction::Store { dest } => vm.store(dest)?,
+                Instruction::Call => {
+                    let f = vm.result.function()?;
+                    if f.arity != vm.arguments.len() {
+                        return Err(RuntimeError::ExpectedArgumentsFound(
+                            f.arity,
+                            vm.arguments.len(),
+                        )
+                        .into());
+                    }
+                    self.call_stack.push((vm.ip + 1, f.code));
+                    vm.ip = 0;
+                    continue;
+                }
+                Instruction::CallIntrinsic => todo!(),
+                Instruction::LoadArguments => vm.load_arguments(),
                 Instruction::Noop => {}
             }
             vm.ip += 1;
