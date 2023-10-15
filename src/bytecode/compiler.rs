@@ -213,7 +213,7 @@ impl BytecodeCompiler {
         }
         let locals = self.scopes.last().unwrap().len();
         self.patch_instruction(start_index, Instruction::CreateScope { locals });
-        self.push_instruction(Instruction::DestroyScope { locals });
+        self.push_instruction(Instruction::DestroyScope { locals }); // could be omitted if locals == 0
         self.scopes.pop().unwrap(); // assert scope was still on stack
         Ok(())
     }

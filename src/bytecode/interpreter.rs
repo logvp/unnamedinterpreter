@@ -97,6 +97,7 @@ impl VirtualMachine {
     }
 
     fn alloc_locals(&mut self, num: usize) {
+        self.result = Value::None;
         for _ in 0..num {
             self.local.push(Default::default())
         }
