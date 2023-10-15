@@ -12,7 +12,8 @@ use crate::{
 use super::{
     compiler::{BytecodeCompiler, Program},
     instruction::{Instruction, Source},
-    value::Value,
+    intrinsics::IntrinsicFunction,
+    value::{FunctionObject, Value},
 };
 
 #[derive(Default)]
@@ -23,15 +24,15 @@ pub struct BytecodeInterpreter {
 }
 
 #[derive(Default)]
-struct VirtualMachine {
-    ip: usize,
-    result: Value,
-    stack_p: Cell<usize>,
-    stack: Vec<Value>,
-    local: Vec<Value>,
-    arguments: Vec<Value>,
-    globals: HashMap<String, Value>,
-    global_consts: HashSet<String>,
+pub(super) struct VirtualMachine {
+    pub ip: usize,
+    pub result: Value,
+    pub stack_p: Cell<usize>,
+    pub stack: Vec<Value>,
+    pub local: Vec<Value>,
+    pub arguments: Vec<Value>,
+    pub globals: HashMap<String, Value>,
+    pub global_consts: HashSet<String>,
 }
 impl VirtualMachine {
     fn push_stack_p(&self) -> usize {
@@ -131,7 +132,22 @@ impl Interpreter for BytecodeInterpreter {
     type ReplReturn = Value;
 
     fn new() -> Self {
-        Self::default()
+        let mut interpreter = Self::default();
+        interpreter.vm.globals.extend([
+            (
+                String::from("print"),
+                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Print)),
+            ),
+            (
+                String::from("debug"),
+                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Debug)),
+            ),
+            (
+                String::from("typeof"),
+                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::TypeOf)),
+            ),
+        ]);
+        interpreter
     }
 
     fn interpret(
@@ -237,20 +253,23 @@ impl BytecodeInterpreter {
                     continue;
                 }
                 Instruction::Store { dest } => vm.store(dest)?,
-                Instruction::Call => {
-                    let f = vm.result.function()?;
-                    if f.arity != vm.arguments.len() {
-                        return Err(RuntimeError::ExpectedArgumentsFound(
-                            f.arity,
-                            vm.arguments.len(),
-                        )
-                        .into());
+                Instruction::Call => match vm.result.function()? {
+                    FunctionObject::Lambda { arity, code } => {
+                        if arity != vm.arguments.len() {
+                            return Err(RuntimeError::ExpectedArgumentsFound(
+                                arity,
+                                vm.arguments.len(),
+                            )
+                            .into());
+                        }
+                        self.call_stack.push((vm.ip + 1, code));
+                        vm.ip = 0;
+                        continue;
                     }
-                    self.call_stack.push((vm.ip + 1, f.code));
-                    vm.ip = 0;
-                    continue;
-                }
-                Instruction::CallIntrinsic => todo!(),
+                    FunctionObject::Intrinsic(intrinsic) => {
+                        intrinsic.exec(vm)?;
+                    }
+                },
                 Instruction::LoadArguments => vm.load_arguments(),
                 Instruction::Noop => {}
             }

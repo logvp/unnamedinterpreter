@@ -51,6 +51,5 @@ pub enum Instruction {
     },
     LoadArguments,
     Call,
-    CallIntrinsic,
     Noop,
 }

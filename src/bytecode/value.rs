@@ -7,10 +7,12 @@ use crate::{
     lexer::Literal,
 };
 
+use super::intrinsics::IntrinsicFunction;
+
 #[derive(Clone, Debug)]
-pub struct FunctionObject {
-    pub arity: usize,
-    pub code: usize,
+pub enum FunctionObject {
+    Lambda { arity: usize, code: usize },
+    Intrinsic(IntrinsicFunction),
 }
 
 #[derive(Clone, Debug)]
@@ -23,7 +25,7 @@ pub enum Value {
     None,
 }
 impl Value {
-    fn type_of(&self) -> RuntimeType {
+    pub fn type_of(&self) -> RuntimeType {
         match self {
             Value::Function { .. } => RuntimeType::Function,
             Value::Integer(_) => RuntimeType::Integer,
@@ -105,8 +107,11 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Function(FunctionObject { arity, code }) => {
-                write!(f, "lambda({}){{{}}}", arity, code)
+            Self::Function(FunctionObject::Lambda { arity, code }) => {
+                write!(f, "<lambda({}){{{}}}>", arity, code)
+            }
+            Self::Function(FunctionObject::Intrinsic(id)) => {
+                write!(f, "<intrinsic {:?}>", id) // TODO implement display for Intrinsic
             }
             Self::Integer(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),

@@ -17,6 +17,7 @@ pub struct Program {
 }
 
 pub struct BytecodeCompiler {
+    // TODO a function is only available in its compilation unit which is fine in a file but doesn't work in the REPL
     chunks: Vec<Vec<Instruction>>,
     chunk_index: Vec<usize>,
     scopes: Vec<HashMap<String, (bool, usize)>>,
@@ -250,7 +251,7 @@ impl BytecodeCompiler {
                 self.pop_chunk();
                 // end the function compilation, now push the function object to the Result
                 self.push_instruction(Instruction::Nullary {
-                    src: Source::Immediate(Value::Function(FunctionObject {
+                    src: Source::Immediate(Value::Function(FunctionObject::Lambda {
                         arity: parameters.len(),
                         code: chunk_index,
                     })),
