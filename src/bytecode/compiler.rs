@@ -244,6 +244,8 @@ impl BytecodeCompiler {
                 });
                 for param in parameters.iter() {
                     self.declare(&param.name, false);
+                }
+                for param in parameters.iter().rev() {
                     self.push_instruction(Instruction::Nullary { src: Source::Stack });
                     self.push_instruction(Instruction::Store {
                         dest: self.resolve(&param.name).1,
