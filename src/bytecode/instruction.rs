@@ -37,7 +37,6 @@ pub enum Instruction {
     },
     // With, // TODO
     // New,  // TODO
-    // Call, // TODO
     CreateScope {
         locals: usize,
     },

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    compiler::{BytecodeCompiler, Program},
+    compiler::{BytecodeCompiler, ProgramWithMetadata},
     instruction::{Instruction, Source},
     intrinsics::IntrinsicFunction,
     value::{FunctionObject, Value},
@@ -18,7 +18,7 @@ use super::{
 
 #[derive(Default)]
 pub struct BytecodeInterpreter {
-    chunks: Vec<Vec<Instruction>>,
+    procedures: Vec<Vec<Instruction>>,
     call_stack: Vec<(usize, usize)>,
     vm: VirtualMachine,
 }
@@ -168,7 +168,7 @@ impl Interpreter for BytecodeInterpreter {
                 return ret;
             }
         };
-        let program = match BytecodeCompiler::compile_bytecode(ast) {
+        let program = match BytecodeCompiler::compile(ast) {
             Ok(program) => program,
             Err(e) => {
                 ret.push(Err(e));
@@ -183,21 +183,21 @@ impl Interpreter for BytecodeInterpreter {
 impl BytecodeInterpreter {
     pub fn run_program(
         &mut self,
-        program: Program,
+        program: ProgramWithMetadata,
     ) -> Result<<Self as Interpreter>::ReplReturn, Error> {
-        let Program {
-            instructions,
+        let ProgramWithMetadata {
+            procedures,
             global_consts,
         } = program;
         self.vm.global_consts.extend(global_consts);
-        self.chunks = instructions;
+        self.procedures = procedures;
         self.call_stack.push((0, 0));
         self.vm.ip = 0;
         self.run()
     }
 
     fn run(&mut self) -> Result<<Self as Interpreter>::ReplReturn, Error> {
-        // for routine in self.chunks.iter() {
+        // for routine in self.procedures.iter() {
         //     println!("Routine:");
         //     for instr in routine.iter() {
         //         println!("{:?}", instr);
@@ -207,8 +207,8 @@ impl BytecodeInterpreter {
         // return Ok(Value::None);
 
         let vm = &mut self.vm;
-        while let Some((_, routine_index)) = self.call_stack.last() {
-            let program = &self.chunks[*routine_index];
+        while let Some((_, procedure_index)) = self.call_stack.last() {
+            let program = &self.procedures[*procedure_index];
             if vm.ip >= program.len() {
                 if let Some((ip, _)) = self.call_stack.pop() {
                     vm.ip = ip;
@@ -218,8 +218,8 @@ impl BytecodeInterpreter {
                 }
             }
             println!(
-                "routine: {}; ip: {}; {:?}",
-                routine_index, vm.ip, program[vm.ip]
+                "procedure: {}; ip: {}; {:?}",
+                procedure_index, vm.ip, program[vm.ip]
             );
             match &program[vm.ip] {
                 Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
@@ -253,7 +253,10 @@ impl BytecodeInterpreter {
                 }
                 Instruction::Store { dest } => vm.store(dest)?,
                 Instruction::Call { argc } => match vm.result.take().function()? {
-                    FunctionObject::Lambda { arity, code } => {
+                    FunctionObject::Lambda {
+                        arity,
+                        procedure_id: code,
+                    } => {
                         if arity != *argc {
                             return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
                         }

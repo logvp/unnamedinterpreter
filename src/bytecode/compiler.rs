@@ -11,31 +11,31 @@ use super::{
     value::Value,
 };
 
-pub struct Program {
-    pub instructions: Vec<Vec<Instruction>>,
+pub struct ProgramWithMetadata {
+    pub procedures: Vec<Vec<Instruction>>,
     pub global_consts: HashSet<String>,
 }
 
 pub struct BytecodeCompiler {
     // TODO a function is only available in its compilation unit which is fine in a file but doesn't work in the REPL
-    chunks: Vec<Vec<Instruction>>,
-    chunk_index: Vec<usize>,
+    procedures: Vec<Vec<Instruction>>,
+    procedure_index: Vec<usize>,
     scopes: Vec<HashMap<String, (bool, usize)>>,
     global_consts: HashSet<String>,
 }
 impl BytecodeCompiler {
-    pub fn compile_bytecode(ast: Ast) -> Result<Program, Error> {
+    pub fn compile(ast: Ast) -> Result<ProgramWithMetadata, Error> {
         let mut compiler = BytecodeCompiler {
-            chunks: vec![Default::default()],
-            chunk_index: vec![0],
+            procedures: vec![Default::default()],
+            procedure_index: vec![0],
             scopes: Default::default(),
             global_consts: Default::default(),
         };
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
-        Ok(Program {
-            instructions: compiler.chunks,
+        Ok(ProgramWithMetadata {
+            procedures: compiler.procedures,
             global_consts: compiler.global_consts,
         })
     }
@@ -66,31 +66,31 @@ impl BytecodeCompiler {
         }
     }
 
-    fn push_chunk(&mut self) -> usize {
+    fn push_procedure(&mut self) -> usize {
         self.scopes.push(Default::default());
-        let index = self.chunks.len();
-        self.chunks.push(Default::default());
-        self.chunk_index.push(index);
+        let index = self.procedures.len();
+        self.procedures.push(Default::default());
+        self.procedure_index.push(index);
         index
     }
 
-    fn pop_chunk(&mut self) {
+    fn pop_procedure(&mut self) {
         self.scopes.pop();
-        self.chunk_index
+        self.procedure_index
             .pop()
-            .expect("Chunk stack should never be empty");
+            .expect("Procedure stack should never be empty");
     }
 
     fn push_instruction(&mut self, instr: Instruction) {
-        self.chunks[*self.chunk_index.last().unwrap()].push(instr)
+        self.procedures[*self.procedure_index.last().unwrap()].push(instr)
     }
 
     fn patch_instruction(&mut self, index: usize, instr: Instruction) {
-        self.chunks[*self.chunk_index.last().unwrap()][index] = instr;
+        self.procedures[*self.procedure_index.last().unwrap()][index] = instr;
     }
 
     fn instruction_index(&self) -> usize {
-        self.chunks[*self.chunk_index.last().unwrap()].len()
+        self.procedures[*self.procedure_index.last().unwrap()].len()
     }
 
     fn compile_node(&mut self, node: &AstNode) -> Result<(), Error> {
@@ -237,8 +237,8 @@ impl BytecodeCompiler {
                 Ok(())
             }
             Expression::Lambda(parameters, body) => {
-                // create a new compiler chunk to have a fresh state
-                let chunk_index = self.push_chunk();
+                // Compile the function body in a new procedure
+                let procedure_id = self.push_procedure();
                 self.push_instruction(Instruction::CreateScope {
                     locals: parameters.len(),
                 });
@@ -253,12 +253,12 @@ impl BytecodeCompiler {
                 self.push_instruction(Instruction::DestroyScope {
                     locals: parameters.len(),
                 });
-                self.pop_chunk();
+                self.pop_procedure();
                 // end the function compilation, now push the function object to the Result
                 self.push_instruction(Instruction::Nullary {
                     src: Source::Immediate(Value::Function(FunctionObject::Lambda {
                         arity: parameters.len(),
-                        code: chunk_index,
+                        procedure_id,
                     })),
                 });
                 Ok(())

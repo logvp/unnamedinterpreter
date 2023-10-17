@@ -11,7 +11,7 @@ use super::intrinsics::IntrinsicFunction;
 
 #[derive(Clone, Debug)]
 pub enum FunctionObject {
-    Lambda { arity: usize, code: usize },
+    Lambda { arity: usize, procedure_id: usize },
     Intrinsic(IntrinsicFunction),
 }
 
@@ -103,7 +103,10 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Function(FunctionObject::Lambda { arity, code }) => {
+            Self::Function(FunctionObject::Lambda {
+                arity,
+                procedure_id: code,
+            }) => {
                 write!(f, "<lambda({}){{{}}}>", arity, code)
             }
             Self::Function(FunctionObject::Intrinsic(id)) => {
