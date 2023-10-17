@@ -75,11 +75,7 @@ impl Value {
         }
     }
 
-    pub fn binary_operation(
-        op: BinaryOperator,
-        a: &Value,
-        b: &Value,
-    ) -> Result<Value, RuntimeError> {
+    pub fn binary_operation(op: BinaryOperator, a: Value, b: Value) -> Result<Value, RuntimeError> {
         use BinaryOperator as Op;
         Ok(match op {
             Op::Equal => Value::Boolean(a == b),
@@ -96,7 +92,7 @@ impl Value {
         })
     }
 
-    pub fn unary_operation(op: UnaryOperator, a: &Value) -> Result<Value, RuntimeError> {
+    pub fn unary_operation(op: UnaryOperator, a: Value) -> Result<Value, RuntimeError> {
         use UnaryOperator as Op;
         Ok(match op {
             Op::Negate => Value::Integer(-a.integer()?),

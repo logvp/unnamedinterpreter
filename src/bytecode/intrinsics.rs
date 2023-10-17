@@ -21,14 +21,16 @@ impl IntrinsicFunction {
                 }
                 println!();
                 vm.pop_many_stack_p(argc);
-                vm.result = Value::None;
                 Ok(())
             }
             IntrinsicFunction::TypeOf => {
                 if argc != 1 {
                     Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
                 } else {
-                    vm.result = Value::String(format!("{}", vm.stack.last().unwrap().type_of()));
+                    vm.result.set(Value::String(format!(
+                        "{}",
+                        vm.stack.last().unwrap().type_of()
+                    )));
                     vm.pop_stack_p();
                     Ok(())
                 }
@@ -39,7 +41,6 @@ impl IntrinsicFunction {
                 }
                 println!();
                 vm.pop_many_stack_p(argc);
-                vm.result = Value::None;
                 Ok(())
             }
         }

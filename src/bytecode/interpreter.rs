@@ -26,7 +26,7 @@ pub struct BytecodeInterpreter {
 #[derive(Default)]
 pub(super) struct VirtualMachine {
     pub ip: usize,
-    pub result: Value,
+    pub result: Cell<Value>,
     pub stack_p: Cell<usize>,
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
@@ -52,19 +52,20 @@ impl VirtualMachine {
         index
     }
 
-    fn fetch<'a>(&'a self, location: &'a Source) -> Result<&'a Value, Error> {
+    fn fetch(&self, location: &Source) -> Result<Value, Error> {
         Ok(match location {
-            Source::Result => &self.result,
-            Source::Immediate(imm) => imm,
+            Source::Result => self.result.take(),
+
+            Source::Immediate(imm) => imm.clone(),
             Source::Local(index) => {
                 let index = self.local.len() - index - 1;
                 self.local.get(index).expect(
                     "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-                )
+                ).clone()
             }
-            Source::Stack => self.stack.get(self.pop_stack_p()).unwrap(),
+            Source::Stack => self.stack.get(self.pop_stack_p()).unwrap().clone(),
             Source::Global(name) => match self.globals.get(name) {
-                Some(value) => value,
+                Some(value) => value.clone(),
                 None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
             },
         })
@@ -78,25 +79,25 @@ impl VirtualMachine {
                 let index = self.local.len() - index - 1;
                 *self.local.get_mut(index).expect(
                     "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-                ) = self.result.clone()
+                ) = self.result.take()
             }
             Source::Stack => {
                 let index = self.push_stack_p();
                 if index == self.stack.len() {
-                    self.stack.push(self.result.clone());
+                    self.stack.push(self.result.take());
                 } else {
-                    self.stack[index] = self.result.clone();
+                    self.stack[index] = self.result.take();
                 }
             }
             Source::Global(name) => match self.globals.get(name) {
                 None => {
-                    self.globals.insert(name.clone(), self.result.clone());
+                    self.globals.insert(name.clone(), self.result.take());
                 }
                 Some(_) => {
                     if self.global_consts.contains(name) {
                         return Err(RuntimeError::ConstReassignment(name.to_owned()).into());
                     } else {
-                        self.globals.insert(name.clone(), self.result.clone());
+                        self.globals.insert(name.clone(), self.result.take());
                     }
                 }
             },
@@ -105,7 +106,7 @@ impl VirtualMachine {
     }
 
     fn alloc_locals(&mut self, num: usize) {
-        self.result = Value::None;
+        let _ = self.result.take();
         for _ in 0..num {
             self.local.push(Default::default())
         }
@@ -221,23 +222,27 @@ impl BytecodeInterpreter {
                 routine_index, vm.ip, program[vm.ip]
             );
             match &program[vm.ip] {
-                Instruction::Nullary { src } => vm.result = vm.fetch(src)?.clone(),
+                Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
                 Instruction::Binary { op, src0, src1 } => {
-                    vm.result = Value::binary_operation(*op, vm.fetch(src0)?, vm.fetch(src1)?)?;
+                    vm.result.set(Value::binary_operation(
+                        *op,
+                        vm.fetch(src0)?,
+                        vm.fetch(src1)?,
+                    )?);
                 }
                 Instruction::Unary { op, src0 } => {
-                    vm.result = Value::unary_operation(*op, vm.fetch(src0)?)?;
+                    vm.result.set(Value::unary_operation(*op, vm.fetch(src0)?)?);
                 }
                 Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
                 Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),
                 Instruction::JumpTrue { jump_dest } => {
-                    if vm.result.boolean()? {
+                    if vm.result.take().boolean()? {
                         vm.jmp(*jump_dest);
                         continue;
                     }
                 }
                 Instruction::JumpFalse { jump_dest } => {
-                    if !vm.result.boolean()? {
+                    if !vm.result.take().boolean()? {
                         vm.jmp(*jump_dest);
                         continue;
                     }
@@ -247,7 +252,7 @@ impl BytecodeInterpreter {
                     continue;
                 }
                 Instruction::Store { dest } => vm.store(dest)?,
-                Instruction::Call { argc } => match vm.result.function()? {
+                Instruction::Call { argc } => match vm.result.take().function()? {
                     FunctionObject::Lambda { arity, code } => {
                         if arity != *argc {
                             return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
@@ -264,6 +269,6 @@ impl BytecodeInterpreter {
             }
             vm.ip += 1;
         }
-        Ok(vm.result.clone())
+        Ok(vm.result.take())
     }
 }
