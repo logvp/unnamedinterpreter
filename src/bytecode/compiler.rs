@@ -225,13 +225,15 @@ impl BytecodeCompiler {
                     // evaluate arguments in order and push them onto the argument stack
                     self.compile_expr(arg)?;
                     self.push_instruction(Instruction::Store {
-                        dest: Source::Arguments,
+                        dest: Source::Stack,
                     });
                 }
 
                 // call instruction with the function object in result
                 self.compile_expr(fun)?;
-                self.push_instruction(Instruction::Call);
+                self.push_instruction(Instruction::Call {
+                    argc: arguments.len(),
+                });
                 Ok(())
             }
             Expression::Lambda(parameters, body) => {
@@ -242,8 +244,11 @@ impl BytecodeCompiler {
                 });
                 for param in parameters.iter() {
                     self.declare(&param.name, false);
+                    self.push_instruction(Instruction::Nullary { src: Source::Stack });
+                    self.push_instruction(Instruction::Store {
+                        dest: self.resolve(&param.name).1,
+                    })
                 }
-                self.push_instruction(Instruction::LoadArguments);
                 self.compile_block(body)?;
                 self.push_instruction(Instruction::DestroyScope {
                     locals: parameters.len(),

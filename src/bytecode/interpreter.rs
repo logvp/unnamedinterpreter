@@ -30,19 +30,24 @@ pub(super) struct VirtualMachine {
     pub stack_p: Cell<usize>,
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
-    pub arguments: Vec<Value>,
     pub globals: HashMap<String, Value>,
     pub global_consts: HashSet<String>,
 }
 impl VirtualMachine {
-    fn push_stack_p(&self) -> usize {
+    pub(super) fn push_stack_p(&self) -> usize {
         let index = self.stack_p.get();
         self.stack_p.set(index + 1);
         index
     }
 
-    fn pop_stack_p(&self) -> usize {
+    pub(super) fn pop_stack_p(&self) -> usize {
         let index = self.stack_p.get() - 1;
+        self.stack_p.set(index);
+        index
+    }
+
+    pub(super) fn pop_many_stack_p(&self, n: usize) -> usize {
+        let index = self.stack_p.get() - n;
         self.stack_p.set(index);
         index
     }
@@ -58,7 +63,6 @@ impl VirtualMachine {
                 )
             }
             Source::Stack => self.stack.get(self.pop_stack_p()).unwrap(),
-            Source::Arguments => unimplemented!(),
             Source::Global(name) => match self.globals.get(name) {
                 Some(value) => value,
                 None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
@@ -84,7 +88,6 @@ impl VirtualMachine {
                     self.stack[index] = self.result.clone();
                 }
             }
-            Source::Arguments => self.arguments.push(self.result.clone()),
             Source::Global(name) => match self.globals.get(name) {
                 None => {
                     self.globals.insert(name.clone(), self.result.clone());
@@ -99,15 +102,6 @@ impl VirtualMachine {
             },
         };
         Ok(())
-    }
-
-    fn load_arguments(&mut self) {
-        while self.arguments.len() != 0 {
-            let index = self.local.len() - self.arguments.len();
-            *self.local.get_mut(index).expect(
-                "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-            ) = self.arguments.pop().unwrap()
-        }
     }
 
     fn alloc_locals(&mut self, num: usize) {
@@ -222,10 +216,10 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
-            // println!(
-            //     "routine: {}; ip: {}; {:?}",
-            //     routine_index, vm.ip, program[vm.ip]
-            // );
+            println!(
+                "routine: {}; ip: {}; {:?}",
+                routine_index, vm.ip, program[vm.ip]
+            );
             match &program[vm.ip] {
                 Instruction::Nullary { src } => vm.result = vm.fetch(src)?.clone(),
                 Instruction::Binary { op, src0, src1 } => {
@@ -253,24 +247,19 @@ impl BytecodeInterpreter {
                     continue;
                 }
                 Instruction::Store { dest } => vm.store(dest)?,
-                Instruction::Call => match vm.result.function()? {
+                Instruction::Call { argc } => match vm.result.function()? {
                     FunctionObject::Lambda { arity, code } => {
-                        if arity != vm.arguments.len() {
-                            return Err(RuntimeError::ExpectedArgumentsFound(
-                                arity,
-                                vm.arguments.len(),
-                            )
-                            .into());
+                        if arity != *argc {
+                            return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
                         }
                         self.call_stack.push((vm.ip + 1, code));
                         vm.ip = 0;
                         continue;
                     }
                     FunctionObject::Intrinsic(intrinsic) => {
-                        intrinsic.exec(vm)?;
+                        intrinsic.exec(*argc, vm)?;
                     }
                 },
-                Instruction::LoadArguments => vm.load_arguments(),
                 Instruction::Noop => {}
             }
             vm.ip += 1;
