@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    compiler::{BytecodeCompiler, ProgramWithMetadata},
+    compiler::{BytecodeCompiler, ProgramChunk},
     instruction::{Instruction, Source},
     intrinsics::IntrinsicFunction,
     value::{FunctionObject, Value},
@@ -169,7 +169,7 @@ impl Interpreter for BytecodeInterpreter {
                 return ret;
             }
         };
-        let program = match BytecodeCompiler::compile(ast) {
+        let program = match BytecodeCompiler::compile(ast, self.procedures.len()) {
             Ok(program) => program,
             Err(e) => {
                 ret.push(Err(e));
@@ -184,15 +184,16 @@ impl Interpreter for BytecodeInterpreter {
 impl BytecodeInterpreter {
     pub fn run_program(
         &mut self,
-        program: ProgramWithMetadata,
+        program: ProgramChunk,
     ) -> Result<<Self as Interpreter>::ReplReturn, Error> {
-        let ProgramWithMetadata {
+        let ProgramChunk {
+            starts_at,
             procedures,
             global_consts,
         } = program;
         self.vm.global_consts.extend(global_consts);
-        self.procedures = procedures;
-        self.call_stack.push((0, 0));
+        self.procedures.extend(procedures);
+        self.call_stack.push((0, starts_at));
         self.vm.ip = 0;
         self.run()
     }

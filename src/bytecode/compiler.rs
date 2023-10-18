@@ -14,21 +14,23 @@ use super::{
     value::Value,
 };
 
-pub struct ProgramWithMetadata {
+pub struct ProgramChunk {
+    pub starts_at: usize,
     pub procedures: Vec<Vec<Instruction>>,
     pub global_consts: HashSet<Rc<str>>,
 }
 
 pub struct BytecodeCompiler {
-    // TODO a function is only available in its compilation unit which is fine in a file but doesn't work in the REPL
+    start_index: usize,
     procedures: Vec<Vec<Instruction>>,
     procedure_index: Vec<usize>,
     scopes: Vec<HashMap<Rc<str>, (bool, usize)>>,
     global_consts: HashSet<Rc<str>>,
 }
 impl BytecodeCompiler {
-    pub fn compile(ast: Ast) -> Result<ProgramWithMetadata, Error> {
+    pub fn compile(ast: Ast, start_index: usize) -> Result<ProgramChunk, Error> {
         let mut compiler = BytecodeCompiler {
+            start_index,
             procedures: vec![Default::default()],
             procedure_index: vec![0],
             scopes: Default::default(),
@@ -37,7 +39,8 @@ impl BytecodeCompiler {
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
-        Ok(ProgramWithMetadata {
+        Ok(ProgramChunk {
+            starts_at: compiler.start_index,
             procedures: compiler.procedures,
             global_consts: compiler.global_consts,
         })
@@ -74,7 +77,7 @@ impl BytecodeCompiler {
         let index = self.procedures.len();
         self.procedures.push(Default::default());
         self.procedure_index.push(index);
-        index
+        index + self.start_index
     }
 
     fn pop_procedure(&mut self) {
