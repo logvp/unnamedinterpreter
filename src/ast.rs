@@ -113,9 +113,9 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> Option<&str> {
+    pub fn name(&self) -> Option<Rc<str>> {
         match self {
-            Self::Identifier(ident) => Some(&ident.name),
+            Self::Identifier(ident) => Some(ident.name.clone()),
             // _ => None,
         }
     }
@@ -123,13 +123,13 @@ impl Lvalue {
 
 #[derive(Debug, Clone)]
 pub struct Identifier {
-    pub name: String,
+    pub name: Rc<str>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(i32),
-    String(String),
+    String(Rc<str>),
     Boolean(bool),
 }
 

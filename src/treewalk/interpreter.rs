@@ -73,18 +73,18 @@ impl Eval for Statement {
             Self::Declaration(lhs, rhs, is_const) => {
                 if !ctx.contains_in_scope(&lhs.name) {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.declare(lhs.name.to_owned(), value, *is_const);
+                    ctx.declare(lhs.name.to_string(), value, *is_const);
                 } else {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_owned()))?
+                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
-                if ctx.contains(lhs.name().unwrap()) {
+                if ctx.contains(lhs.name().unwrap().as_ref()) {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.update(lhs.name().unwrap().to_owned(), value)?;
+                    ctx.update(lhs.name().unwrap().to_string(), value)?;
                 } else {
                     Err(RuntimeError::UnknownIdentifier(
-                        lhs.name().unwrap().to_owned(),
+                        lhs.name().unwrap().to_string(),
                     ))?
                 }
             }
@@ -225,7 +225,7 @@ fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<Runtim
                     }
                     // Bind arguments to parameter names
                     for (ident, val) in parameters.iter().zip(args.into_iter()) {
-                        scope.declare(ident.name.to_owned(), val, false);
+                        scope.declare(ident.name.to_string(), val, false);
                     }
 
                     body.eval(Rc::new(scope))
@@ -258,7 +258,7 @@ impl Eval for Literal {
     fn eval(&self, _: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Integer(int) => Ok(RuntimeValue::Integer(*int)),
-            Self::String(string) => Ok(RuntimeValue::String(string.to_owned())),
+            Self::String(string) => Ok(RuntimeValue::String(string.to_string())), // STRING_ALLOCATION
             Self::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
     }
@@ -268,7 +268,7 @@ impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match ctx.get(&self.name) {
             Some(Variable { val, .. }) => Ok(val),
-            None => Err(RuntimeError::UnknownIdentifier(self.name.to_owned()).into()),
+            None => Err(RuntimeError::UnknownIdentifier(self.name.to_string()).into()),
         }
     }
 }

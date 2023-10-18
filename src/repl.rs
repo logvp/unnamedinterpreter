@@ -3,6 +3,7 @@ use crate::interpreter::Interpreter;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};
+use std::rc::Rc;
 
 pub struct Repl<T: Interpreter, I: BufRead, O: Write> {
     interpreter: T,
@@ -169,7 +170,7 @@ pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
     path: &P,
 ) -> io::Result<Vec<Result<T::ReplReturn, Error>>> {
     let content = std::fs::read_to_string(path)?;
-    Ok(T::new().interpret(&content, path.as_ref().to_str().map(|name| name.into())))
+    Ok(T::new().interpret(&content, path.as_ref().to_str().map(|name| Rc::from(name))))
 }
 
 pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {

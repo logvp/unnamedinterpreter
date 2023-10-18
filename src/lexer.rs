@@ -12,7 +12,7 @@ pub struct Token {
 #[derive(Debug)]
 pub enum TokenKind {
     Literal(Literal),
-    Identifier(String),
+    Identifier(Rc<str>),
     LeftParen,
     RightParen,
     LeftAngle,
@@ -237,7 +237,7 @@ impl Lexer {
                     if let Some(c @ '"') = chars.next() {
                         loc.inc(c);
 
-                        TokenKind::Literal(Literal::String(buffer.clone()))
+                        TokenKind::Literal(Literal::String(Rc::from(buffer.clone())))
                     } else {
                         return Err(LexicalError::UnterminatedStringLiteral(buffer, loc));
                     }
@@ -288,7 +288,7 @@ impl Lexer {
                         "while" => TokenKind::While,
                         "if" => TokenKind::If,
                         "else" => TokenKind::Else,
-                        _ => TokenKind::Identifier(buffer.clone()),
+                        _ => TokenKind::Identifier(Rc::from(buffer.clone())),
                     };
                     tok
                 }

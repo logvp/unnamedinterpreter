@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use crate::{
     ast::{BinaryOperator, UnaryOperator},
@@ -20,7 +20,7 @@ pub enum Value {
     // Object(), TODO
     Function(FunctionObject),
     Integer(i32),
-    String(String),
+    String(Rc<str>),
     Boolean(bool),
     None,
 }
@@ -55,7 +55,7 @@ impl Value {
         }
     }
 
-    pub fn string(&self) -> Result<String, RuntimeError> {
+    pub fn string(&self) -> Result<Rc<str>, RuntimeError> {
         match self {
             Value::String(x) => Ok(x.clone()),
             x => Err(RuntimeError::ExpectedButFound(
@@ -88,7 +88,7 @@ impl Value {
             Op::Subtract => Value::Integer(a.integer()? - b.integer()?),
             Op::Multiply => Value::Integer(a.integer()? * b.integer()?),
             Op::Divide => Value::Integer(a.integer()? / b.integer()?),
-            Op::Concatenate => Value::String(format!("{}{}", a.string()?, b.string()?)),
+            Op::Concatenate => Value::String(Rc::from(format!("{}{}", a.string()?, b.string()?))), // STRING_ALLOCATION
         })
     }
 
@@ -141,6 +141,15 @@ impl From<Literal> for Value {
             Literal::Boolean(x) => Value::Boolean(x),
             Literal::Integer(x) => Value::Integer(x),
             Literal::String(x) => Value::String(x),
+        }
+    }
+}
+impl From<&Literal> for Value {
+    fn from(value: &Literal) -> Self {
+        match value {
+            Literal::Boolean(x) => Value::Boolean(*x),
+            Literal::Integer(x) => Value::Integer(*x),
+            Literal::String(x) => Value::String(Rc::clone(x)),
         }
     }
 }

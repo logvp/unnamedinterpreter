@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::ast::{BinaryOperator, UnaryOperator};
 
 use super::value::Value;
@@ -8,7 +10,7 @@ pub enum Source {
     Result,
     Stack,
     Local(usize),
-    Global(String),
+    Global(Rc<str>),
 }
 
 #[derive(Debug)]

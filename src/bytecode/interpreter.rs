@@ -1,6 +1,7 @@
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    rc::Rc,
 };
 
 use crate::{
@@ -30,8 +31,8 @@ pub(super) struct VirtualMachine {
     pub stack_p: Cell<usize>,
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
-    pub globals: HashMap<String, Value>,
-    pub global_consts: HashSet<String>,
+    pub globals: HashMap<Rc<str>, Value>,
+    pub global_consts: HashSet<Rc<str>>,
 }
 impl VirtualMachine {
     pub(super) fn push_stack_p(&self) -> usize {
@@ -66,7 +67,7 @@ impl VirtualMachine {
             Source::Stack => self.stack.get(self.pop_stack_p()).unwrap().clone(),
             Source::Global(name) => match self.globals.get(name) {
                 Some(value) => value.clone(),
-                None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
+                None => return Err(RuntimeError::UnknownIdentifier(name.to_string()).into()),
             },
         })
     }
@@ -89,15 +90,15 @@ impl VirtualMachine {
                     self.stack[index] = self.result.take();
                 }
             }
-            Source::Global(name) => match self.globals.get(name) {
+            Source::Global(name) => match self.globals.get(name.as_ref()) {
                 None => {
-                    self.globals.insert(name.clone(), self.result.take());
+                    self.globals.insert(Rc::clone(name), self.result.take());
                 }
                 Some(_) => {
-                    if self.global_consts.contains(name) {
-                        return Err(RuntimeError::ConstReassignment(name.to_owned()).into());
+                    if self.global_consts.contains(name.as_ref()) {
+                        return Err(RuntimeError::ConstReassignment(name.to_string()).into());
                     } else {
-                        self.globals.insert(name.clone(), self.result.take());
+                        self.globals.insert(Rc::clone(name), self.result.take());
                     }
                 }
             },
@@ -130,15 +131,15 @@ impl Interpreter for BytecodeInterpreter {
         let mut interpreter = Self::default();
         interpreter.vm.globals.extend([
             (
-                String::from("print"),
+                Rc::from("print"),
                 Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Print)),
             ),
             (
-                String::from("debug"),
+                Rc::from("debug"),
                 Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Debug)),
             ),
             (
-                String::from("typeof"),
+                Rc::from("typeof"),
                 Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::TypeOf)),
             ),
         ]);
@@ -217,10 +218,10 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
-            println!(
-                "procedure: {}; ip: {}; {:?}",
-                procedure_index, vm.ip, program[vm.ip]
-            );
+            // println!(
+            //     "procedure: {}; ip: {}; {:?}",
+            //     procedure_index, vm.ip, program[vm.ip]
+            // );
             match &program[vm.ip] {
                 Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
                 Instruction::Binary { op, src0, src1 } => {

@@ -240,7 +240,7 @@ impl Parser {
     fn parse_braced_block(&mut self, ort: Construct) -> Result<Block, Error> {
         self.expect(TokenKind::LeftBrace, ort)?;
         let block = self.parse_ast_nodes(TokenKind::RightBrace, ort)?;
-        Ok(Block(block.into()))
+        Ok(Block(Rc::from(block)))
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, Error> {
@@ -290,7 +290,7 @@ impl Parser {
         self.expect(TokenKind::Lambda, Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
         let body = self.parse_braced_block(Construct::LambdaBody)?;
-        Ok(Expression::Lambda(params.into(), body))
+        Ok(Expression::Lambda(Rc::from(params), body))
     }
 
     fn parse_lambda_params(&mut self) -> Result<Vec<Identifier>, Error> {
@@ -322,7 +322,7 @@ impl Parser {
             }
         }
         self.expect(TokenKind::RightParen, ORT)?;
-        Ok(args.into())
+        Ok(Rc::from(args))
     }
 
     fn parse_identifier(&mut self, ort: Construct) -> Result<Identifier, Error> {
@@ -331,7 +331,7 @@ impl Parser {
             Ok(Identifier { name })
         } else {
             Err(SyntaxError::ExpectedTokenIn(
-                TokenKind::Identifier(String::new()),
+                TokenKind::Identifier(Rc::from(String::new())),
                 ident,
                 ort,
                 self.loc.clone(),

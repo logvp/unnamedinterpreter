@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
@@ -13,15 +16,15 @@ use super::{
 
 pub struct ProgramWithMetadata {
     pub procedures: Vec<Vec<Instruction>>,
-    pub global_consts: HashSet<String>,
+    pub global_consts: HashSet<Rc<str>>,
 }
 
 pub struct BytecodeCompiler {
     // TODO a function is only available in its compilation unit which is fine in a file but doesn't work in the REPL
     procedures: Vec<Vec<Instruction>>,
     procedure_index: Vec<usize>,
-    scopes: Vec<HashMap<String, (bool, usize)>>,
-    global_consts: HashSet<String>,
+    scopes: Vec<HashMap<Rc<str>, (bool, usize)>>,
+    global_consts: HashSet<Rc<str>>,
 }
 impl BytecodeCompiler {
     pub fn compile(ast: Ast) -> Result<ProgramWithMetadata, Error> {
@@ -40,29 +43,29 @@ impl BytecodeCompiler {
         })
     }
 
-    fn resolve(&self, name: &str) -> (bool, Source) {
+    fn resolve(&self, name: Rc<str>) -> (bool, Source) {
         let mut parent_depth = 0;
         for scope in self.scopes.iter().rev() {
-            if let Some((is_const, index)) = scope.get(name) {
+            if let Some((is_const, index)) = scope.get(name.as_ref()) {
                 return (*is_const, Source::Local(index + parent_depth));
             }
             parent_depth += scope.len();
         }
-        (false, Source::Global(name.to_string()))
+        (false, Source::Global(name))
     }
 
-    fn declare(&mut self, name: &str, is_const: bool) -> Source {
+    fn declare(&mut self, name: Rc<str>, is_const: bool) -> Source {
         if let Some(scope) = self.scopes.last_mut() {
             let index = scope.len();
-            let None = scope.insert(name.to_owned(), (is_const, index)) else {
+            let None = scope.insert(name, (is_const, index)) else {
                 todo!("handle redeclaration")
             };
             Source::Local(index)
         } else {
             if is_const {
-                self.global_consts.insert(name.to_owned());
+                self.global_consts.insert(Rc::clone(&name));
             }
-            Source::Global(name.to_owned())
+            Source::Global(name)
         }
     }
 
@@ -105,13 +108,13 @@ impl BytecodeCompiler {
             Statement::Assignment(lvalue, expr) => {
                 // if local was declared const, return error
                 let (false, dest) = self.resolve(lvalue.name().unwrap()) else {
-                    return Err(RuntimeError::ConstReassignment(lvalue.name().unwrap().to_owned()).into())
+                    return Err(RuntimeError::ConstReassignment(lvalue.name().unwrap().to_string()).into())
                 };
                 self.compile_expr(expr)?;
                 self.push_instruction(Instruction::Store { dest });
             }
             Statement::Declaration(ident, expr, is_const) => {
-                let dest = self.declare(&ident.name, *is_const);
+                let dest = self.declare(Rc::clone(&ident.name), *is_const);
                 self.compile_expr(expr)?;
                 self.push_instruction(Instruction::Store { dest });
             }
@@ -127,16 +130,16 @@ impl BytecodeCompiler {
         match expr {
             Expression::Binary(op, lhs, rhs) => {
                 let mut src0 = match lhs.as_ref() {
-                    Expression::Literal(literal) => Source::Immediate(Value::from(literal.clone())),
-                    Expression::Variable(ident) => self.resolve(&ident.name).1,
+                    Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
+                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)).1,
                     expr => {
                         self.compile_expr(expr)?;
                         Source::Result
                     }
                 };
                 let src1 = match rhs.as_ref() {
-                    Expression::Literal(literal) => Source::Immediate(Value::from(literal.clone())),
-                    Expression::Variable(ident) => self.resolve(&ident.name).1,
+                    Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
+                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)).1,
                     expr => {
                         // save lhs
                         if !matches!(src0, Source::Result) {
@@ -167,12 +170,12 @@ impl BytecodeCompiler {
             }
             Expression::Literal(literal) => {
                 self.push_instruction(Instruction::Nullary {
-                    src: Source::Immediate(Value::from(literal.clone())),
+                    src: Source::Immediate(Value::from(literal)),
                 });
                 Ok(())
             }
             Expression::Variable(ident) => {
-                let (_, src) = self.resolve(&ident.name);
+                let (_, src) = self.resolve(Rc::clone(&ident.name));
                 self.push_instruction(Instruction::Nullary { src });
                 Ok(())
             }
@@ -243,12 +246,12 @@ impl BytecodeCompiler {
                     locals: parameters.len(),
                 });
                 for param in parameters.iter() {
-                    self.declare(&param.name, false);
+                    self.declare(Rc::clone(&param.name), false);
                 }
                 for param in parameters.iter().rev() {
                     self.push_instruction(Instruction::Nullary { src: Source::Stack });
                     self.push_instruction(Instruction::Store {
-                        dest: self.resolve(&param.name).1,
+                        dest: self.resolve(Rc::clone(&param.name)).1,
                     })
                 }
                 self.compile_block(body)?;
