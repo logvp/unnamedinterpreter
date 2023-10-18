@@ -18,7 +18,13 @@ impl IntrinsicFunction {
     pub(super) fn exec(&self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {
         match self {
             IntrinsicFunction::Print => {
-                for arg in vm.stack.drain(vm.stack.len() - argc..) {
+                for arg in vm
+                    .stack
+                    .get((vm.stack_p.get() - argc)..)
+                    .unwrap()
+                    .iter()
+                    .take(argc)
+                {
                     print!("{} ", arg)
                 }
                 println!();
@@ -29,15 +35,22 @@ impl IntrinsicFunction {
                 if argc != 1 {
                     Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
                 } else {
-                    vm.result.set(Value::String(
-                        Rc::from(format!("{}", vm.stack.last().unwrap().type_of())), // TODO: STRING_ALLOCATION
-                    ));
+                    vm.result.set(Value::String(Rc::from(format!(
+                        "{}",
+                        vm.stack.get(vm.stack_p.get() - argc).unwrap().type_of()
+                    ))));
                     vm.pop_stack_p();
                     Ok(())
                 }
             }
             IntrinsicFunction::Debug => {
-                for arg in vm.stack.drain(vm.stack.len() - argc..) {
+                for arg in vm
+                    .stack
+                    .get((vm.stack_p.get() - argc)..)
+                    .unwrap()
+                    .iter()
+                    .take(argc)
+                {
                     print!("{:?} ", arg)
                 }
                 println!();
