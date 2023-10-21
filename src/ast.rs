@@ -121,7 +121,7 @@ impl Lvalue {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Identifier {
     pub name: Rc<str>,
 }
