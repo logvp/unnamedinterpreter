@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     bytecode::value::Value,
@@ -7,12 +7,26 @@ use crate::{
 
 use super::interpreter::VirtualMachine;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum IntrinsicFunction {
     Print,
     TypeOf,
     Debug,
 }
+
+pub fn get_name(intrinsic: IntrinsicFunction) -> &'static str {
+    match intrinsic {
+        IntrinsicFunction::Print => "print",
+        IntrinsicFunction::TypeOf => "typeof",
+        IntrinsicFunction::Debug => "debug",
+    }
+}
+
+pub const INTRINSICS: [IntrinsicFunction; 3] = [
+    IntrinsicFunction::Print,
+    IntrinsicFunction::TypeOf,
+    IntrinsicFunction::Debug,
+];
 
 impl IntrinsicFunction {
     pub(super) fn exec(&self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {

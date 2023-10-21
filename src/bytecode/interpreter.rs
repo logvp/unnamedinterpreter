@@ -13,15 +13,16 @@ use crate::{
 use super::{
     compiler::{BytecodeCompiler, ProgramChunk},
     instruction::{Instruction, Source},
-    intrinsics::IntrinsicFunction,
+    intrinsics,
+    resolver::Resolver,
     value::{FunctionObject, Value},
 };
 
-#[derive(Default)]
 pub struct BytecodeInterpreter {
     procedures: Vec<Vec<Instruction>>,
     call_stack: Vec<(usize, usize)>,
     vm: VirtualMachine,
+    resolver: Resolver,
 }
 
 #[derive(Default)]
@@ -128,21 +129,26 @@ impl Interpreter for BytecodeInterpreter {
     type ReplReturn = Value;
 
     fn new() -> Self {
-        let mut interpreter = Self::default();
-        interpreter.vm.globals.extend([
-            (
-                Rc::from("print"),
-                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Print)),
-            ),
-            (
-                Rc::from("debug"),
-                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::Debug)),
-            ),
-            (
-                Rc::from("typeof"),
-                Value::Function(FunctionObject::Intrinsic(IntrinsicFunction::TypeOf)),
-            ),
-        ]);
+        let mut interpreter = BytecodeInterpreter {
+            vm: Default::default(),
+            resolver: Resolver::new(),
+            call_stack: Default::default(),
+            procedures: Default::default(),
+        };
+        interpreter
+            .vm
+            .globals
+            .extend(intrinsics::INTRINSICS.map(|intrinsic| {
+                (
+                    Rc::from(intrinsics::get_name(intrinsic)),
+                    Value::Function(FunctionObject::Intrinsic(intrinsic)),
+                )
+            }));
+        interpreter.resolver.define_globals(
+            &intrinsics::INTRINSICS
+                .map(intrinsics::get_name)
+                .map(Rc::from),
+        );
         interpreter
     }
 
@@ -169,13 +175,14 @@ impl Interpreter for BytecodeInterpreter {
                 return ret;
             }
         };
-        let program = match BytecodeCompiler::compile(ast, self.procedures.len()) {
-            Ok(program) => program,
-            Err(e) => {
-                ret.push(Err(e));
-                return ret;
-            }
-        };
+        let program =
+            match BytecodeCompiler::compile(ast, self.procedures.len(), &mut self.resolver) {
+                Ok(program) => program,
+                Err(e) => {
+                    ret.push(Err(e));
+                    return ret;
+                }
+            };
         ret.push(self.run_program(program));
         ret
     }

@@ -11,6 +11,7 @@ use crate::{
 
 use super::{
     instruction::{Instruction, Source},
+    resolver::Resolver,
     value::Value,
 };
 
@@ -28,14 +29,22 @@ pub struct BytecodeCompiler {
     global_consts: HashSet<Rc<str>>,
 }
 impl BytecodeCompiler {
-    pub fn compile(ast: Ast, start_index: usize) -> Result<ProgramChunk, Error> {
-        let mut compiler = BytecodeCompiler {
+    fn new(start_index: usize) -> Self {
+        BytecodeCompiler {
             start_index,
             procedures: vec![Default::default()],
             procedure_index: vec![0],
             scopes: Default::default(),
             global_consts: Default::default(),
-        };
+        }
+    }
+    pub fn compile(
+        ast: Ast,
+        start_index: usize,
+        resolver: &mut Resolver,
+    ) -> Result<ProgramChunk, Error> {
+        resolver.resolve(&ast)?;
+        let mut compiler = BytecodeCompiler::new(start_index);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
