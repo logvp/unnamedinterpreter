@@ -51,8 +51,7 @@ fn lexer() {
 
 #[test]
 fn parser() {
-    let mut parser = parser::Parser::new(PROGRAM, None).unwrap();
-    let _ = parser.gen_ast().unwrap();
+    let _ = parser::Parser::gen_ast(PROGRAM, None).unwrap();
 }
 
 #[test]

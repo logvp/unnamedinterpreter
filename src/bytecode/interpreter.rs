@@ -135,20 +135,7 @@ impl Interpreter for BytecodeInterpreter {
             call_stack: Default::default(),
             procedures: Default::default(),
         };
-        interpreter
-            .vm
-            .globals
-            .extend(intrinsics::INTRINSICS.map(|intrinsic| {
-                (
-                    Rc::from(intrinsics::get_name(intrinsic)),
-                    Value::Function(FunctionObject::Intrinsic(intrinsic)),
-                )
-            }));
-        interpreter.resolver.define_globals(
-            &intrinsics::INTRINSICS
-                .map(intrinsics::get_name)
-                .map(Rc::from),
-        );
+        interpreter.define_intrinsics();
         interpreter
     }
 
@@ -157,38 +144,36 @@ impl Interpreter for BytecodeInterpreter {
         text: &str,
         filename: Option<std::rc::Rc<str>>,
     ) -> Vec<Result<Self::ReplReturn, Error>> {
-        let mut ret: Vec<Result<_, Error>> = Default::default();
-        let mut parser = {
-            match Parser::new(text, filename) {
-                Ok(parser) => parser,
-                Err(e) => {
-                    ret.push(Err(e));
-                    return ret;
-                }
-            }
-        };
-        let gen = parser.gen_ast();
-        let ast = match gen {
+        let ast = match Parser::gen_ast(text, filename) {
             Ok(ast) => ast,
-            Err(e) => {
-                ret.push(Err(e));
-                return ret;
-            }
+            Err(e) => return vec![Err(e)],
         };
         let program =
-            match BytecodeCompiler::compile(ast, self.procedures.len(), &mut self.resolver) {
+            match BytecodeCompiler::gen_bytecode(ast, self.procedures.len(), &mut self.resolver) {
                 Ok(program) => program,
-                Err(e) => {
-                    ret.push(Err(e));
-                    return ret;
-                }
+                Err(e) => return vec![Err(e)],
             };
-        ret.push(self.run_program(program));
-        ret
+        vec![self.run_program(program)]
     }
 }
 
 impl BytecodeInterpreter {
+    fn define_intrinsics(&mut self) {
+        self.vm
+            .globals
+            .extend(intrinsics::INTRINSICS.map(|intrinsic| {
+                (
+                    Rc::from(intrinsics::get_name(intrinsic)),
+                    Value::Function(FunctionObject::Intrinsic(intrinsic)),
+                )
+            }));
+        self.resolver.define_globals(
+            &intrinsics::INTRINSICS
+                .map(intrinsics::get_name)
+                .map(Rc::from),
+        );
+    }
+
     pub fn run_program(
         &mut self,
         program: ProgramChunk,

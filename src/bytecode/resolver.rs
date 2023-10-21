@@ -46,6 +46,19 @@ impl Resolver {
         }
     }
 
+    fn push_scope(&mut self) {
+        self.local_scopes.push(Scope {
+            data: Default::default(),
+            parent: self.current_scope,
+        });
+        self.current_scope = self.local_scopes.len();
+    }
+
+    fn pop_scope(&mut self) {
+        // 'pop' old scope
+        self.current_scope = self.get_local_scope().unwrap().parent;
+    }
+
     pub fn define_globals(&mut self, identifiers: &[Rc<str>]) {
         for ident in identifiers.iter() {
             self.global_scope
@@ -254,18 +267,5 @@ impl Resolver {
         }
         self.pop_scope();
         Ok(())
-    }
-
-    fn push_scope(&mut self) {
-        self.local_scopes.push(Scope {
-            data: Default::default(),
-            parent: self.current_scope,
-        });
-        self.current_scope = self.local_scopes.len();
-    }
-
-    fn pop_scope(&mut self) {
-        // 'pop' old scope
-        self.current_scope = self.get_local_scope().unwrap().parent;
     }
 }

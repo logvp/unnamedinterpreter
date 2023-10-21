@@ -12,15 +12,17 @@ pub struct Parser {
     loc: Loc,
 }
 impl Parser {
-    pub fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
+    fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
         Ok(Parser {
             lexer: Lexer::lex(text, filename.clone())?,
             loc: Loc::new(filename),
         })
     }
 
-    pub fn gen_ast(&mut self) -> Result<Ast, Error> {
-        self.parse_ast_nodes(TokenKind::Eof, Construct::TopLevel)
+    pub fn gen_ast(text: &str, filename: Option<Rc<str>>) -> Result<Ast, Error> {
+        let mut parser = Parser::new(text, filename)?;
+        parser
+            .parse_ast_nodes(TokenKind::Eof, Construct::TopLevel)
             .map(|x| Ast { nodes: x })
     }
 

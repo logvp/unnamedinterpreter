@@ -38,7 +38,7 @@ impl BytecodeCompiler {
             global_consts: Default::default(),
         }
     }
-    pub fn compile(
+    pub fn gen_bytecode(
         ast: Ast,
         start_index: usize,
         resolver: &mut Resolver,
