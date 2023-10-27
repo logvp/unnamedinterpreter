@@ -10,7 +10,7 @@ use super::{
     compiler::{BytecodeCompiler, ProgramChunk},
     instruction::{Instruction, Source},
     intrinsics,
-    resolver::{GlobalVariable, Resolver},
+    resolver::{GlobalVariable, ResolutionTable, Resolver},
     value::{FunctionObject, Value},
 };
 
@@ -69,7 +69,7 @@ impl VirtualMachine {
         })
     }
 
-    fn store(&mut self, location: &Source, resolver: &Resolver) -> Result<(), Error> {
+    fn store(&mut self, location: &Source, variables: &ResolutionTable) -> Result<(), Error> {
         match location {
             Source::Result => {}
             Source::Immediate(_) => panic!("Cannot store to immediate value"),
@@ -87,7 +87,7 @@ impl VirtualMachine {
                     self.stack[index] = self.result.take();
                 }
             }
-            Source::Global(name) => match resolver.get_global(name) {
+            Source::Global(name) => match variables.lookup_global(name)? {
                 GlobalVariable::Constant => {
                     if self.globals.contains_key(name.as_ref()) {
                         return Err(RuntimeError::ConstReassignment(name.to_string()).into());
@@ -98,9 +98,7 @@ impl VirtualMachine {
                 GlobalVariable::NotConstant => {
                     self.globals.insert(Rc::clone(name), self.result.take());
                 }
-                GlobalVariable::Unknown => {
-                    return Err(RuntimeError::UnknownIdentifier(name.to_string()).into());
-                }
+                GlobalVariable::Unknown => unreachable!(),
             },
         };
         Ok(())
@@ -211,14 +209,14 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
-            println!(
-                "procedure: {}; ip: {}; {:?}",
-                procedure_index, vm.ip, program[vm.ip]
-            );
+            // println!(
+            //     "procedure: {}; ip: {}; {:?}",
+            //     procedure_index, vm.ip, program[vm.ip]
+            // );
             match BytecodeInterpreter::eval_instruction(
                 &program[vm.ip],
                 vm,
-                &self.resolver,
+                &self.resolver.get_table(),
                 &mut self.call_stack,
             ) {
                 Ok(true) => continue,
@@ -236,7 +234,7 @@ impl BytecodeInterpreter {
     fn eval_instruction(
         instruction: &Instruction,
         vm: &mut VirtualMachine,
-        resolver: &Resolver,
+        variables: &ResolutionTable,
         call_stack: &mut CallStack,
     ) -> Result<bool, Error> {
         match instruction {
@@ -269,7 +267,7 @@ impl BytecodeInterpreter {
                 vm.jmp(*jump_dest);
                 return Ok(true);
             }
-            Instruction::Store { dest } => vm.store(dest, resolver)?,
+            Instruction::Store { dest } => vm.store(dest, variables)?,
             Instruction::Call { argc } => match vm.result.take().function()? {
                 FunctionObject::Lambda {
                     arity,
