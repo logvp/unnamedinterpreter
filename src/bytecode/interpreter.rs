@@ -225,7 +225,7 @@ impl BytecodeInterpreter {
                 Ok(false) => vm.ip += 1,
                 Err(e) => {
                     // reset to a known safe state then return error
-                    vm.ip = usize::MAX; // hacky but should work?
+                    self.call_stack.clear();
                     return Err(e);
                 }
             }
