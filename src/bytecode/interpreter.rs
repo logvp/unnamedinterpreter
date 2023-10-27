@@ -1,8 +1,4 @@
-use std::{
-    cell::Cell,
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use crate::{
     error::{Error, RuntimeError},
@@ -14,13 +10,14 @@ use super::{
     compiler::{BytecodeCompiler, ProgramChunk},
     instruction::{Instruction, Source},
     intrinsics,
-    resolver::Resolver,
+    resolver::{GlobalVariable, Resolver},
     value::{FunctionObject, Value},
 };
 
+type CallStack = Vec<(usize, usize)>;
 pub struct BytecodeInterpreter {
     procedures: Vec<Vec<Instruction>>,
-    call_stack: Vec<(usize, usize)>,
+    call_stack: CallStack,
     vm: VirtualMachine,
     resolver: Resolver,
 }
@@ -33,7 +30,6 @@ pub(super) struct VirtualMachine {
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
     pub globals: HashMap<Rc<str>, Value>,
-    pub global_consts: HashSet<Rc<str>>,
 }
 impl VirtualMachine {
     pub(super) fn push_stack_p(&self) -> usize {
@@ -73,7 +69,7 @@ impl VirtualMachine {
         })
     }
 
-    fn store(&mut self, location: &Source) -> Result<(), Error> {
+    fn store(&mut self, location: &Source, resolver: &Resolver) -> Result<(), Error> {
         match location {
             Source::Result => {}
             Source::Immediate(_) => panic!("Cannot store to immediate value"),
@@ -81,7 +77,7 @@ impl VirtualMachine {
                 let index = self.local.len() - index - 1;
                 *self.local.get_mut(index).expect(
                     "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
-                ) = self.result.take()
+                ) = self.result.take();
             }
             Source::Stack => {
                 let index = self.push_stack_p();
@@ -91,16 +87,19 @@ impl VirtualMachine {
                     self.stack[index] = self.result.take();
                 }
             }
-            Source::Global(name) => match self.globals.get(name.as_ref()) {
-                None => {
-                    self.globals.insert(Rc::clone(name), self.result.take());
-                }
-                Some(_) => {
-                    if self.global_consts.contains(name.as_ref()) {
+            Source::Global(name) => match resolver.get_global(name) {
+                GlobalVariable::Constant => {
+                    if self.globals.contains_key(name.as_ref()) {
                         return Err(RuntimeError::ConstReassignment(name.to_string()).into());
                     } else {
                         self.globals.insert(Rc::clone(name), self.result.take());
                     }
+                }
+                GlobalVariable::NotConstant => {
+                    self.globals.insert(Rc::clone(name), self.result.take());
+                }
+                GlobalVariable::Unknown => {
+                    return Err(RuntimeError::UnknownIdentifier(name.to_string()).into());
                 }
             },
         };
@@ -148,8 +147,11 @@ impl Interpreter for BytecodeInterpreter {
             Ok(ast) => ast,
             Err(e) => return vec![Err(e)],
         };
+        if let Err(e) = self.resolver.resolve(&ast) {
+            return vec![Err(e)];
+        }
         let program =
-            match BytecodeCompiler::gen_bytecode(ast, self.procedures.len(), &mut self.resolver) {
+            match BytecodeCompiler::gen_bytecode(ast, self.procedures.len(), &self.resolver) {
                 Ok(program) => program,
                 Err(e) => return vec![Err(e)],
             };
@@ -181,9 +183,7 @@ impl BytecodeInterpreter {
         let ProgramChunk {
             starts_at,
             procedures,
-            global_consts,
         } = program;
-        self.vm.global_consts.extend(global_consts);
         self.procedures.extend(procedures);
         self.call_stack.push((0, starts_at));
         self.vm.ip = 0;
@@ -211,61 +211,83 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
-            // println!(
-            //     "procedure: {}; ip: {}; {:?}",
-            //     procedure_index, vm.ip, program[vm.ip]
-            // );
-            match &program[vm.ip] {
-                Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
-                Instruction::Binary { op, src0, src1 } => {
-                    vm.result.set(Value::binary_operation(
-                        *op,
-                        vm.fetch(src0)?,
-                        vm.fetch(src1)?,
-                    )?);
+            println!(
+                "procedure: {}; ip: {}; {:?}",
+                procedure_index, vm.ip, program[vm.ip]
+            );
+            match BytecodeInterpreter::eval_instruction(
+                &program[vm.ip],
+                vm,
+                &self.resolver,
+                &mut self.call_stack,
+            ) {
+                Ok(true) => continue,
+                Ok(false) => vm.ip += 1,
+                Err(e) => {
+                    // reset to a known safe state then return error
+                    vm.ip = usize::MAX; // hacky but should work?
+                    return Err(e);
                 }
-                Instruction::Unary { op, src0 } => {
-                    vm.result.set(Value::unary_operation(*op, vm.fetch(src0)?)?);
-                }
-                Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
-                Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),
-                Instruction::JumpTrue { jump_dest } => {
-                    if vm.result.take().boolean()? {
-                        vm.jmp(*jump_dest);
-                        continue;
-                    }
-                }
-                Instruction::JumpFalse { jump_dest } => {
-                    if !vm.result.take().boolean()? {
-                        vm.jmp(*jump_dest);
-                        continue;
-                    }
-                }
-                Instruction::UnconditionalJump { jump_dest } => {
-                    vm.jmp(*jump_dest);
-                    continue;
-                }
-                Instruction::Store { dest } => vm.store(dest)?,
-                Instruction::Call { argc } => match vm.result.take().function()? {
-                    FunctionObject::Lambda {
-                        arity,
-                        procedure_id: code,
-                    } => {
-                        if arity != *argc {
-                            return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
-                        }
-                        self.call_stack.push((vm.ip + 1, code));
-                        vm.ip = 0;
-                        continue;
-                    }
-                    FunctionObject::Intrinsic(intrinsic) => {
-                        intrinsic.exec(*argc, vm)?;
-                    }
-                },
-                Instruction::Noop => {}
             }
-            vm.ip += 1;
         }
         Ok(vm.result.take())
+    }
+
+    fn eval_instruction(
+        instruction: &Instruction,
+        vm: &mut VirtualMachine,
+        resolver: &Resolver,
+        call_stack: &mut CallStack,
+    ) -> Result<bool, Error> {
+        match instruction {
+            Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
+            Instruction::Binary { op, src0, src1 } => {
+                vm.result.set(Value::binary_operation(
+                    *op,
+                    vm.fetch(src0)?,
+                    vm.fetch(src1)?,
+                )?);
+            }
+            Instruction::Unary { op, src0 } => {
+                vm.result.set(Value::unary_operation(*op, vm.fetch(src0)?)?);
+            }
+            Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
+            Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),
+            Instruction::JumpTrue { jump_dest } => {
+                if vm.result.take().boolean()? {
+                    vm.jmp(*jump_dest);
+                    return Ok(true);
+                }
+            }
+            Instruction::JumpFalse { jump_dest } => {
+                if !vm.result.take().boolean()? {
+                    vm.jmp(*jump_dest);
+                    return Ok(true);
+                }
+            }
+            Instruction::UnconditionalJump { jump_dest } => {
+                vm.jmp(*jump_dest);
+                return Ok(true);
+            }
+            Instruction::Store { dest } => vm.store(dest, resolver)?,
+            Instruction::Call { argc } => match vm.result.take().function()? {
+                FunctionObject::Lambda {
+                    arity,
+                    procedure_id: code,
+                } => {
+                    if arity != *argc {
+                        return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
+                    }
+                    call_stack.push((vm.ip + 1, code));
+                    vm.ip = 0;
+                    return Ok(true);
+                }
+                FunctionObject::Intrinsic(intrinsic) => {
+                    intrinsic.exec(*argc, vm)?;
+                }
+            },
+            Instruction::Noop => {}
+        }
+        Ok(false)
     }
 }

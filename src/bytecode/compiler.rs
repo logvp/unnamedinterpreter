@@ -18,7 +18,6 @@ use super::{
 pub struct ProgramChunk {
     pub starts_at: usize,
     pub procedures: Vec<Vec<Instruction>>,
-    pub global_consts: HashSet<Rc<str>>,
 }
 
 pub struct BytecodeCompiler {
@@ -41,9 +40,8 @@ impl BytecodeCompiler {
     pub fn gen_bytecode(
         ast: Ast,
         start_index: usize,
-        resolver: &mut Resolver,
+        resolver: &Resolver,
     ) -> Result<ProgramChunk, Error> {
-        resolver.resolve(&ast)?;
         let mut compiler = BytecodeCompiler::new(start_index);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
@@ -51,7 +49,6 @@ impl BytecodeCompiler {
         Ok(ProgramChunk {
             starts_at: compiler.start_index,
             procedures: compiler.procedures,
-            global_consts: compiler.global_consts,
         })
     }
 

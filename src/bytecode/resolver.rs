@@ -11,7 +11,7 @@ enum LocalVariable {
 }
 
 #[derive(Debug)]
-enum GlobalVariable {
+pub(super) enum GlobalVariable {
     Constant,
     NotConstant,
     Unknown,
@@ -57,6 +57,12 @@ impl Resolver {
     fn pop_scope(&mut self) {
         // 'pop' old scope
         self.current_scope = self.get_local_scope().unwrap().parent;
+    }
+
+    pub(super) fn get_global(&self, name: &Rc<str>) -> &GlobalVariable {
+        self.global_scope
+            .get(name)
+            .unwrap_or(&GlobalVariable::Unknown)
     }
 
     pub fn define_globals(&mut self, identifiers: &[Rc<str>]) {
@@ -167,16 +173,18 @@ impl Resolver {
                         )
                         .is_some()
                 } else {
-                    self.global_scope
-                        .insert(
-                            ident.name.clone(),
-                            if *is_const {
-                                GlobalVariable::Constant
-                            } else {
-                                GlobalVariable::NotConstant
-                            },
-                        )
-                        .is_some()
+                    match self.global_scope.insert(
+                        ident.name.clone(),
+                        if *is_const {
+                            GlobalVariable::Constant
+                        } else {
+                            GlobalVariable::NotConstant
+                        },
+                    ) {
+                        Some(GlobalVariable::Unknown) => false,
+                        Some(_) => true,
+                        None => false,
+                    }
                 };
                 if redeclaration {
                     return Err(RuntimeError::VariableRedeclaration(ident.name.to_string()).into());
