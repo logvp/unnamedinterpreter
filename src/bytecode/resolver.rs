@@ -85,25 +85,30 @@ impl ResolutionTable {
         Ok(())
     }
 
-    fn make_assignment(&mut self, ident: Rc<str>, scope: usize) -> Result<(), Error> {
+    fn make_assignment(
+        &mut self,
+        ident: Rc<str>,
+        scope: usize,
+        in_a_closure: bool,
+    ) -> Result<(), Error> {
         if scope > 0 {
             match self.lookup_local(&ident, scope) {
-                Ok(
+                Some(
                     LocalVariable::Local {
                         is_const: false, ..
                     }
                     | LocalVariable::Captured { is_const: false },
                 ) => {}
-                Ok(
+                Some(
                     LocalVariable::Local { is_const: true, .. }
                     | LocalVariable::Captured { is_const: true },
                 ) => return Err(RuntimeError::ConstReassignment(ident.to_string()).into()),
-                Err(_) => match self.global_scope.get(&ident) {
+                None => match self.global_scope.get(&ident) {
                     Some(GlobalVariable::NotConstant) | Some(GlobalVariable::Unknown) => {}
                     Some(GlobalVariable::Constant) => {
                         return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
                     }
-                    None => self.make_tentative_global(ident),
+                    None => self.found_unknown_variable(ident, in_a_closure)?,
                 },
             }
         } else {
@@ -113,20 +118,25 @@ impl ResolutionTable {
                     return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
                 }
                 Some(GlobalVariable::Unknown) | None => {
-                    return Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
+                    self.found_unknown_variable(ident, in_a_closure)?
                 }
             }
         }
         Ok(())
     }
 
-    fn make_tentative_global(&mut self, ident: Rc<str>) {
-        match self
-            .global_scope
-            .insert(Rc::clone(&ident), GlobalVariable::Unknown)
-        {
-            Some(GlobalVariable::Unknown) | None => {}
-            Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
+    fn found_unknown_variable(&mut self, ident: Rc<str>, in_a_closure: bool) -> Result<(), Error> {
+        if in_a_closure {
+            // it could be a global that has not been defined yet, but will be before this closure is called
+            match self
+                .global_scope
+                .insert(Rc::clone(&ident), GlobalVariable::Unknown)
+            {
+                Some(GlobalVariable::Unknown) | None => Ok(()),
+                Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
+            }
+        } else {
+            return Err(RuntimeError::UnknownIdentifier(ident.to_string()).into());
         }
     }
 
@@ -155,16 +165,16 @@ impl ResolutionTable {
         }
     }
 
-    pub fn lookup_local(&self, ident: &str, scope: usize) -> Result<LocalVariable, Error> {
+    pub fn lookup_local(&self, ident: &str, scope: usize) -> Option<LocalVariable> {
         let mut index = scope;
         while index > 0 {
             let s = self.local_scopes.get(index - 1).unwrap();
             if let Some(var) = s.data.get(ident) {
-                return Ok(*var);
+                return Some(*var);
             }
             index = s.parent;
         }
-        Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
+        None
     }
 
     pub fn lookup_local_in_scope(&self, ident: &str, scope: usize) -> Option<LocalVariable> {
@@ -177,12 +187,14 @@ impl ResolutionTable {
 
 pub(super) struct Resolver {
     current_scope: usize,
+    in_a_closure: usize,
     scopes: ResolutionTable,
 }
 impl Resolver {
     pub fn new() -> Self {
         Resolver {
             current_scope: 0,
+            in_a_closure: 0,
             scopes: Default::default(),
         }
     }
@@ -242,7 +254,8 @@ impl Resolver {
         match stmt {
             Statement::Assignment(lvalue, expr) => {
                 let name = lvalue.name().unwrap();
-                self.scopes.make_assignment(name, self.current_scope)?;
+                self.scopes
+                    .make_assignment(name, self.current_scope, self.in_a_closure > 0)?;
 
                 self.resolve_expr(expr)?;
             }
@@ -274,11 +287,16 @@ impl Resolver {
             Expression::Variable(ident) => {
                 let name = &ident.name;
                 if self.in_local_scope() {
-                    if self.scopes.lookup_local(&name, self.current_scope).is_ok() {
+                    if self
+                        .scopes
+                        .lookup_local(&name, self.current_scope)
+                        .is_some()
+                    {
                         return Ok(());
                     }
                     if self.scopes.lookup_global(&name).is_err() {
-                        self.scopes.make_tentative_global(Rc::clone(name))
+                        self.scopes
+                            .found_unknown_variable(Rc::clone(name), self.in_a_closure > 0)?
                     }
                 } else {
                     self.scopes.lookup_global(name)?;
@@ -309,7 +327,9 @@ impl Resolver {
                     self.scopes
                         .make_declaration(self.current_scope, param.name.clone(), false)?;
                 }
+                self.in_a_closure += 1;
                 self.resolve_block(body)?;
+                self.in_a_closure -= 1;
                 self.pop_scope();
             }
             x => todo!("Resolving {:?} is not implemented yet", x),
