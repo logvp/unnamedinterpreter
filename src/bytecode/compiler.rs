@@ -60,7 +60,9 @@ impl<'a> BytecodeCompiler<'a> {
                 Some(LocalVariable::Local { index, .. }) => {
                     return Source::Local(index.unwrap() + parent_depth);
                 }
-                Some(LocalVariable::Captured { .. }) => todo!(),
+                Some(LocalVariable::Captured { .. }) => {
+                    todo!("Captured variables are not yet supported")
+                }
                 None => parent_depth += self.variables.get_num_locals_in_scope(scope),
             }
             scope = self.variables.parent_of(scope);

@@ -89,10 +89,10 @@ impl ResolutionTable {
         &mut self,
         ident: Rc<str>,
         scope: usize,
-        in_a_closure: bool,
+        closure_boundary: usize,
     ) -> Result<(), Error> {
         if scope > 0 {
-            match self.lookup_local(&ident, scope) {
+            match self.get_local_and_capture(&ident, scope, closure_boundary) {
                 Some(
                     LocalVariable::Local {
                         is_const: false, ..
@@ -108,7 +108,7 @@ impl ResolutionTable {
                     Some(GlobalVariable::Constant) => {
                         return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
                     }
-                    None => self.found_unknown_variable(ident, in_a_closure)?,
+                    None => self.found_unknown_variable(ident, closure_boundary > 0)?,
                 },
             }
         } else {
@@ -118,7 +118,7 @@ impl ResolutionTable {
                     return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
                 }
                 Some(GlobalVariable::Unknown) | None => {
-                    self.found_unknown_variable(ident, in_a_closure)?
+                    self.found_unknown_variable(ident, closure_boundary > 0)?
                 }
             }
         }
@@ -165,14 +165,23 @@ impl ResolutionTable {
         }
     }
 
-    pub fn lookup_local(&self, ident: &str, scope: usize) -> Option<LocalVariable> {
-        let mut index = scope;
-        while index > 0 {
-            let s = self.local_scopes.get(index - 1).unwrap();
-            if let Some(var) = s.data.get(ident) {
+    pub fn get_local_and_capture(
+        &mut self,
+        ident: &str,
+        mut scope: usize,
+        closure_boundary: usize,
+    ) -> Option<LocalVariable> {
+        while scope > 0 {
+            let s = self.local_scopes.get_mut(scope - 1).unwrap();
+            if let Some(var) = s.data.get_mut(ident) {
+                if scope < closure_boundary {
+                    if let LocalVariable::Local { is_const, .. } = *var {
+                        *var = LocalVariable::Captured { is_const }
+                    }
+                }
                 return Some(*var);
             }
-            index = s.parent;
+            scope = s.parent;
         }
         None
     }
@@ -187,14 +196,14 @@ impl ResolutionTable {
 
 pub(super) struct Resolver {
     current_scope: usize,
-    in_a_closure: usize,
+    closure_boundary: usize,
     scopes: ResolutionTable,
 }
 impl Resolver {
     pub fn new() -> Self {
         Resolver {
             current_scope: 0,
-            in_a_closure: 0,
+            closure_boundary: 0,
             scopes: Default::default(),
         }
     }
@@ -255,7 +264,7 @@ impl Resolver {
             Statement::Assignment(lvalue, expr) => {
                 let name = lvalue.name().unwrap();
                 self.scopes
-                    .make_assignment(name, self.current_scope, self.in_a_closure > 0)?;
+                    .make_assignment(name, self.current_scope, self.closure_boundary)?;
 
                 self.resolve_expr(expr)?;
             }
@@ -289,14 +298,14 @@ impl Resolver {
                 if self.in_local_scope() {
                     if self
                         .scopes
-                        .lookup_local(&name, self.current_scope)
+                        .get_local_and_capture(&name, self.current_scope, self.closure_boundary)
                         .is_some()
                     {
                         return Ok(());
                     }
                     if self.scopes.lookup_global(&name).is_err() {
                         self.scopes
-                            .found_unknown_variable(Rc::clone(name), self.in_a_closure > 0)?
+                            .found_unknown_variable(Rc::clone(name), self.closure_boundary > 0)?
                     }
                 } else {
                     self.scopes.lookup_global(name)?;
@@ -327,9 +336,10 @@ impl Resolver {
                     self.scopes
                         .make_declaration(self.current_scope, param.name.clone(), false)?;
                 }
-                self.in_a_closure += 1;
+                let saved_closure_boundary = self.closure_boundary;
+                self.closure_boundary = self.current_scope;
                 self.resolve_block(body)?;
-                self.in_a_closure -= 1;
+                self.closure_boundary = saved_closure_boundary;
                 self.pop_scope();
             }
             x => todo!("Resolving {:?} is not implemented yet", x),
