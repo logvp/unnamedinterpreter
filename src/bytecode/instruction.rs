@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinaryOperator, UnaryOperator};
 
-use super::value::{FunctionObject, Value};
+use super::value::Value;
 
 #[derive(Debug, Clone)]
 pub enum Source {
