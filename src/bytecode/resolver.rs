@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy)]
-enum LocalVariable {
+pub(super) enum LocalVariable {
     Local {
         is_const: bool,
         index: Option<usize>,
@@ -24,17 +24,18 @@ pub(super) enum GlobalVariable {
 }
 
 pub struct Scope {
+    num_locals: usize,
     parent: usize,
     data: HashMap<Rc<str>, LocalVariable>,
 }
 
 #[derive(Default)]
-pub struct ResolutionTable {
+pub(super) struct ResolutionTable {
     local_scopes: Vec<Scope>,
     global_scope: HashMap<Rc<str>, GlobalVariable>,
 }
 impl ResolutionTable {
-    fn parent_of(&self, scope: usize) -> usize {
+    pub fn parent_of(&self, scope: usize) -> usize {
         if scope == 0 {
             return 0;
         }
@@ -52,7 +53,8 @@ impl ResolutionTable {
         ident: Rc<str>,
         is_const: bool,
     ) -> Result<(), Error> {
-        let redeclaration = if let Some(scope) = self.local_scopes.get_mut(scope - 1) {
+        let redeclaration = if scope > 0 {
+            let scope = self.local_scopes.get_mut(scope - 1).unwrap();
             scope
                 .data
                 .insert(
@@ -130,26 +132,33 @@ impl ResolutionTable {
 
     fn resolve_local_addresses(&mut self, scope: usize) {
         let mut i = 0;
-        for var in self.local_scopes[scope - 1].data.values_mut() {
+        let scope = &mut self.local_scopes[scope - 1];
+        for var in scope.data.values_mut() {
             if let LocalVariable::Local { index, .. } = var {
                 *index = Some(i);
                 i += 1;
             }
         }
+        scope.num_locals = i;
     }
 
-    pub(super) fn lookup_global(&self, ident: &str) -> Result<GlobalVariable, Error> {
+    pub fn get_num_locals_in_scope(&self, scope: usize) -> usize {
+        self.local_scopes[scope - 1].num_locals
+    }
+
+    pub fn lookup_global(&self, ident: &str) -> Result<GlobalVariable, Error> {
         match self.global_scope.get(ident) {
             Some(a @ (GlobalVariable::NotConstant | GlobalVariable::Constant)) => Ok(*a),
             Some(GlobalVariable::Unknown) | None => {
-                return Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
+                Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
             }
         }
     }
 
-    pub(self) fn lookup_local(&self, ident: &str, scope: usize) -> Result<LocalVariable, Error> {
+    pub fn lookup_local(&self, ident: &str, scope: usize) -> Result<LocalVariable, Error> {
         let mut index = scope;
-        while let Some(s) = self.local_scopes.get(index - 1) {
+        while index > 0 {
+            let s = self.local_scopes.get(index - 1).unwrap();
             if let Some(var) = s.data.get(ident) {
                 return Ok(*var);
             }
@@ -157,9 +166,16 @@ impl ResolutionTable {
         }
         Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
     }
+
+    pub fn lookup_local_in_scope(&self, ident: &str, scope: usize) -> Option<LocalVariable> {
+        if scope == 0 {
+            return None;
+        }
+        self.local_scopes[scope - 1].data.get(ident).cloned()
+    }
 }
 
-pub struct Resolver {
+pub(super) struct Resolver {
     current_scope: usize,
     scopes: ResolutionTable,
 }
@@ -177,6 +193,7 @@ impl Resolver {
 
     fn push_scope(&mut self) {
         self.current_scope = self.scopes.make_scope(Scope {
+            num_locals: 0,
             data: Default::default(),
             parent: self.current_scope,
         });
@@ -184,7 +201,8 @@ impl Resolver {
 
     fn pop_scope(&mut self) {
         // 'pop' old scope
-        self.current_scope = self.scopes.parent_of(self.current_scope)
+        self.scopes.resolve_local_addresses(self.current_scope);
+        self.current_scope = self.scopes.parent_of(self.current_scope);
     }
 
     fn in_local_scope(&self) -> bool {
@@ -224,8 +242,7 @@ impl Resolver {
         match stmt {
             Statement::Assignment(lvalue, expr) => {
                 let name = lvalue.name().unwrap();
-                self.scopes
-                    .make_assignment(name.clone(), self.current_scope)?;
+                self.scopes.make_assignment(name, self.current_scope)?;
 
                 self.resolve_expr(expr)?;
             }
@@ -280,10 +297,10 @@ impl Resolver {
                 self.resolve_block(body)?;
             }
             Expression::FunctionCall(fun, arguments) => {
-                self.resolve_expr(fun)?;
                 for arg in arguments.iter() {
                     self.resolve_expr(arg)?;
                 }
+                self.resolve_expr(fun)?;
             }
             Expression::Lambda(parameters, body) => {
                 self.push_scope();
@@ -306,7 +323,6 @@ impl Resolver {
         for node in nodes.iter() {
             self.resolve_node(node)?;
         }
-        self.scopes.resolve_local_addresses(self.current_scope);
         self.pop_scope();
         Ok(())
     }

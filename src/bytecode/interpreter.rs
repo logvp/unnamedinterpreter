@@ -58,7 +58,7 @@ impl VirtualMachine {
             Source::Local(index) => {
                 let index = self.local.len() - index - 1;
                 self.local.get(index).expect(
-                    "Attempt to store to unallocated local memory. Reserve memory with CreateScope",
+                    "Attempt to read from unallocated local memory. Reserve memory with CreateScope",
                 ).clone()
             }
             Source::Stack => self.stack.get(self.pop_stack_p()).unwrap().clone(),
@@ -148,11 +148,14 @@ impl Interpreter for BytecodeInterpreter {
         if let Err(e) = self.resolver.resolve(&ast) {
             return vec![Err(e)];
         }
-        let program =
-            match BytecodeCompiler::gen_bytecode(ast, self.procedures.len(), &self.resolver) {
-                Ok(program) => program,
-                Err(e) => return vec![Err(e)],
-            };
+        let program = match BytecodeCompiler::gen_bytecode(
+            ast,
+            self.procedures.len(),
+            self.resolver.get_table(),
+        ) {
+            Ok(program) => program,
+            Err(e) => return vec![Err(e)],
+        };
         vec![self.run_program(program)]
     }
 }
@@ -209,6 +212,7 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
+            // println!("{:?}", vm.local);
             // println!(
             //     "procedure: {}; ip: {}; {:?}",
             //     procedure_index, vm.ip, program[vm.ip]
@@ -216,7 +220,7 @@ impl BytecodeInterpreter {
             match BytecodeInterpreter::eval_instruction(
                 &program[vm.ip],
                 vm,
-                &self.resolver.get_table(),
+                self.resolver.get_table(),
                 &mut self.call_stack,
             ) {
                 Ok(true) => continue,
@@ -238,7 +242,7 @@ impl BytecodeInterpreter {
         call_stack: &mut CallStack,
     ) -> Result<bool, Error> {
         match instruction {
-            Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?.clone()),
+            Instruction::Nullary { src } => vm.result.set(vm.fetch(src)?),
             Instruction::Binary { op, src0, src1 } => {
                 vm.result.set(Value::binary_operation(
                     *op,

@@ -1,17 +1,14 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::rc::Rc;
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
     bytecode::value::FunctionObject,
-    error::{Error, RuntimeError},
+    error::Error,
 };
 
 use super::{
     instruction::{Instruction, Source},
-    resolver::Resolver,
+    resolver::{LocalVariable, ResolutionTable},
     value::Value,
 };
 
@@ -20,29 +17,32 @@ pub struct ProgramChunk {
     pub procedures: Vec<Vec<Instruction>>,
 }
 
-pub struct BytecodeCompiler {
+pub(super) struct BytecodeCompiler<'a> {
     start_index: usize,
     procedures: Vec<Vec<Instruction>>,
     procedure_index: Vec<usize>,
-    scopes: Vec<HashMap<Rc<str>, (bool, usize)>>,
-    global_consts: HashSet<Rc<str>>,
+    variables: &'a ResolutionTable,
+    current_scope: usize,
+    next_scope: usize,
 }
-impl BytecodeCompiler {
-    fn new(start_index: usize) -> Self {
+impl<'a> BytecodeCompiler<'a> {
+    fn new(start_index: usize, variables: &'a ResolutionTable) -> Self {
         BytecodeCompiler {
             start_index,
             procedures: vec![Default::default()],
             procedure_index: vec![0],
-            scopes: Default::default(),
-            global_consts: Default::default(),
+            variables,
+            current_scope: 0,
+            next_scope: 1,
         }
     }
+
     pub fn gen_bytecode(
         ast: Ast,
         start_index: usize,
-        resolver: &Resolver,
+        variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
-        let mut compiler = BytecodeCompiler::new(start_index);
+        let mut compiler = BytecodeCompiler::new(start_index, variables);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
         }
@@ -52,34 +52,33 @@ impl BytecodeCompiler {
         })
     }
 
-    fn resolve(&self, name: Rc<str>) -> (bool, Source) {
+    fn resolve(&self, name: Rc<str>) -> Source {
         let mut parent_depth = 0;
-        for scope in self.scopes.iter().rev() {
-            if let Some((is_const, index)) = scope.get(name.as_ref()) {
-                return (*is_const, Source::Local(index + parent_depth));
+        let mut scope = self.current_scope;
+        while scope > 0 {
+            match self.variables.lookup_local_in_scope(&name, scope) {
+                Some(LocalVariable::Local { index, .. }) => {
+                    return Source::Local(index.unwrap() + parent_depth);
+                }
+                Some(LocalVariable::Captured { .. }) => todo!(),
+                None => parent_depth += self.variables.get_num_locals_in_scope(scope),
             }
-            parent_depth += scope.len();
+            scope = self.variables.parent_of(scope);
         }
-        (false, Source::Global(name))
+        Source::Global(name)
     }
 
-    fn declare(&mut self, name: Rc<str>, is_const: bool) -> Source {
-        if let Some(scope) = self.scopes.last_mut() {
-            let index = scope.len();
-            let None = scope.insert(name, (is_const, index)) else {
-                todo!("handle redeclaration")
-            };
-            Source::Local(index)
-        } else {
-            if is_const {
-                self.global_consts.insert(Rc::clone(&name));
-            }
-            Source::Global(name)
-        }
+    fn push_scope(&mut self) {
+        self.current_scope = self.next_scope;
+        self.next_scope += 1;
+    }
+
+    fn pop_scope(&mut self) {
+        self.current_scope = self.variables.parent_of(self.current_scope);
     }
 
     fn push_procedure(&mut self) -> usize {
-        self.scopes.push(Default::default());
+        self.push_scope();
         let index = self.procedures.len();
         self.procedures.push(Default::default());
         self.procedure_index.push(index);
@@ -87,7 +86,7 @@ impl BytecodeCompiler {
     }
 
     fn pop_procedure(&mut self) {
-        self.scopes.pop();
+        self.pop_scope();
         self.procedure_index
             .pop()
             .expect("Procedure stack should never be empty");
@@ -116,14 +115,12 @@ impl BytecodeCompiler {
         match stmt {
             Statement::Assignment(lvalue, expr) => {
                 // if local was declared const, return error
-                let (false, dest) = self.resolve(lvalue.name().unwrap()) else {
-                    return Err(RuntimeError::ConstReassignment(lvalue.name().unwrap().to_string()).into())
-                };
+                let dest = self.resolve(lvalue.name().unwrap());
                 self.compile_expr(expr)?;
                 self.push_instruction(Instruction::Store { dest });
             }
-            Statement::Declaration(ident, expr, is_const) => {
-                let dest = self.declare(Rc::clone(&ident.name), *is_const);
+            Statement::Declaration(ident, expr, _) => {
+                let dest = self.resolve(Rc::clone(&ident.name));
                 self.compile_expr(expr)?;
                 self.push_instruction(Instruction::Store { dest });
             }
@@ -140,7 +137,7 @@ impl BytecodeCompiler {
             Expression::Binary(op, lhs, rhs) => {
                 let mut src0 = match lhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
-                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)).1,
+                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)),
                     expr => {
                         self.compile_expr(expr)?;
                         Source::Result
@@ -148,7 +145,7 @@ impl BytecodeCompiler {
                 };
                 let src1 = match rhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
-                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)).1,
+                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)),
                     expr => {
                         // save lhs
                         if !matches!(src0, Source::Result) {
@@ -184,7 +181,7 @@ impl BytecodeCompiler {
                 Ok(())
             }
             Expression::Variable(ident) => {
-                let (_, src) = self.resolve(Rc::clone(&ident.name));
+                let src = self.resolve(Rc::clone(&ident.name));
                 self.push_instruction(Instruction::Nullary { src });
                 Ok(())
             }
@@ -255,12 +252,12 @@ impl BytecodeCompiler {
                     locals: parameters.len(),
                 });
                 for param in parameters.iter() {
-                    self.declare(Rc::clone(&param.name), false);
+                    self.resolve(Rc::clone(&param.name));
                 }
                 for param in parameters.iter().rev() {
                     self.push_instruction(Instruction::Nullary { src: Source::Stack });
                     self.push_instruction(Instruction::Store {
-                        dest: self.resolve(Rc::clone(&param.name)).1,
+                        dest: self.resolve(Rc::clone(&param.name)),
                     })
                 }
                 self.compile_block(body)?;
@@ -284,16 +281,16 @@ impl BytecodeCompiler {
     fn compile_block(&mut self, block: &Block) -> Result<(), Error> {
         let Block(nodes) = block;
         // new block = new scope
-        self.scopes.push(Default::default());
+        self.push_scope();
         let start_index = self.instruction_index();
         self.push_instruction(Instruction::Noop); // Placeholder for CreateScope because number of locals is unknown
         for node in nodes.iter() {
             self.compile_node(node)?;
         }
-        let locals = self.scopes.last().unwrap().len();
+        let locals = self.variables.get_num_locals_in_scope(self.current_scope);
         self.patch_instruction(start_index, Instruction::CreateScope { locals });
         self.push_instruction(Instruction::DestroyScope { locals }); // could be omitted if locals == 0
-        self.scopes.pop().unwrap(); // assert scope was still on stack
+        self.pop_scope(); // assert scope was still on stack
         Ok(())
     }
 }
