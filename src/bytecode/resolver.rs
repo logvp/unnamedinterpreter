@@ -7,8 +7,13 @@ use crate::{
 
 #[derive(Clone, Copy)]
 enum LocalVariable {
-    Local { is_const: bool },
-    Captured { is_const: bool },
+    Local {
+        is_const: bool,
+        index: Option<usize>,
+    },
+    Captured {
+        is_const: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -50,7 +55,13 @@ impl ResolutionTable {
         let redeclaration = if let Some(scope) = self.local_scopes.get_mut(scope - 1) {
             scope
                 .data
-                .insert(ident.clone(), LocalVariable::Local { is_const })
+                .insert(
+                    ident.clone(),
+                    LocalVariable::Local {
+                        is_const,
+                        index: None,
+                    },
+                )
                 .is_some()
         } else {
             match self.global_scope.insert(
@@ -76,11 +87,13 @@ impl ResolutionTable {
         if scope > 0 {
             match self.lookup_local(&ident, scope) {
                 Ok(
-                    LocalVariable::Local { is_const: false }
+                    LocalVariable::Local {
+                        is_const: false, ..
+                    }
                     | LocalVariable::Captured { is_const: false },
                 ) => {}
                 Ok(
-                    LocalVariable::Local { is_const: true }
+                    LocalVariable::Local { is_const: true, .. }
                     | LocalVariable::Captured { is_const: true },
                 ) => return Err(RuntimeError::ConstReassignment(ident.to_string()).into()),
                 Err(_) => match self.global_scope.get(&ident) {
@@ -112,6 +125,16 @@ impl ResolutionTable {
         {
             Some(GlobalVariable::Unknown) | None => {}
             Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
+        }
+    }
+
+    fn resolve_local_addresses(&mut self, scope: usize) {
+        let mut i = 0;
+        for var in self.local_scopes[scope - 1].data.values_mut() {
+            if let LocalVariable::Local { index, .. } = var {
+                *index = Some(i);
+                i += 1;
+            }
         }
     }
 
@@ -175,14 +198,6 @@ impl Resolver {
                 .unwrap()
         }
     }
-
-    // fn get_local_scope(&self) -> Option<&Scope> {
-    //     self.scopes.get_local_scope(self.current_scope)
-    // }
-
-    // fn get_local_scope_mut(&mut self) -> Option<&mut Scope> {
-    //     self.scopes.get_local_scope_mut(self.current_scope)
-    // }
 
     pub fn resolve(&mut self, ast: &Ast) -> Result<(), Error> {
         for node in ast.nodes.iter() {
@@ -273,9 +288,9 @@ impl Resolver {
             Expression::Lambda(parameters, body) => {
                 self.push_scope();
                 for param in parameters.iter() {
+                    // parameters are mutable by default
                     self.scopes
                         .make_declaration(self.current_scope, param.name.clone(), false)?;
-                    // parameters are variable by default
                 }
                 self.resolve_block(body)?;
                 self.pop_scope();
@@ -291,6 +306,7 @@ impl Resolver {
         for node in nodes.iter() {
             self.resolve_node(node)?;
         }
+        self.scopes.resolve_local_addresses(self.current_scope);
         self.pop_scope();
         Ok(())
     }
