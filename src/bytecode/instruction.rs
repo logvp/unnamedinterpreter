@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinaryOperator, UnaryOperator};
 
-use super::value::Value;
+use super::value::{FunctionObject, Value};
 
 #[derive(Debug, Clone)]
 pub enum Source {
@@ -11,14 +11,11 @@ pub enum Source {
     Stack,
     Local(usize),
     Global(Rc<str>),
+    Env(Rc<str>),
 }
 
 #[derive(Debug)]
 pub enum Instruction {
-    // Load src to Result
-    Nullary {
-        src: Source,
-    },
     Binary {
         op: BinaryOperator,
         src0: Source,
@@ -27,6 +24,14 @@ pub enum Instruction {
     Unary {
         op: UnaryOperator,
         src0: Source,
+    },
+    // Load src to Result
+    Nullary {
+        src: Source,
+    },
+    FunctionLiteral {
+        arity: usize,
+        procedure_id: usize,
     },
     JumpTrue {
         jump_dest: usize,

@@ -136,7 +136,7 @@ impl ResolutionTable {
                 Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
             }
         } else {
-            return Err(RuntimeError::UnknownIdentifier(ident.to_string()).into());
+            Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
         }
     }
 
@@ -298,12 +298,12 @@ impl Resolver {
                 if self.in_local_scope() {
                     if self
                         .scopes
-                        .get_local_and_capture(&name, self.current_scope, self.closure_boundary)
+                        .get_local_and_capture(name, self.current_scope, self.closure_boundary)
                         .is_some()
                     {
                         return Ok(());
                     }
-                    if self.scopes.lookup_global(&name).is_err() {
+                    if self.scopes.lookup_global(name).is_err() {
                         self.scopes
                             .found_unknown_variable(Rc::clone(name), self.closure_boundary > 0)?
                     }

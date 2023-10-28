@@ -7,11 +7,15 @@ use crate::{
     lexer::Literal,
 };
 
-use super::intrinsics::IntrinsicFunction;
+use super::{interpreter::Environment, intrinsics::IntrinsicFunction};
 
 #[derive(Clone, Debug)]
 pub enum FunctionObject {
-    Lambda { arity: usize, procedure_id: usize },
+    Lambda {
+        arity: usize,
+        procedure_id: usize,
+        capture: Rc<Environment>,
+    },
     Intrinsic(IntrinsicFunction),
 }
 
@@ -106,8 +110,15 @@ impl Display for Value {
             Self::Function(FunctionObject::Lambda {
                 arity,
                 procedure_id: code,
+                capture,
             }) => {
-                write!(f, "<lambda({}){{{}}}>", arity, code)
+                write!(
+                    f,
+                    "<lambda({}){{{}}}#{:p}>",
+                    arity,
+                    code,
+                    Rc::as_ptr(capture)
+                )
             }
             Self::Function(FunctionObject::Intrinsic(id)) => {
                 write!(f, "<intrinsic {:?}>", id) // TODO implement display for Intrinsic

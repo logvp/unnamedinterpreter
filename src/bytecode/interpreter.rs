@@ -1,4 +1,9 @@
-use std::{cell::Cell, collections::HashMap, rc::Rc};
+use std::{
+    borrow::BorrowMut,
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+};
 
 use crate::{
     error::{Error, RuntimeError},
@@ -13,6 +18,40 @@ use super::{
     resolver::{GlobalVariable, ResolutionTable, Resolver},
     value::{FunctionObject, Value},
 };
+
+#[derive(Clone, Debug)]
+pub struct Environment {
+    data: Rc<RefCell<HashMap<Rc<str>, Value>>>,
+    parent: Option<Rc<Environment>>,
+}
+impl Environment {
+    fn new(parent: Option<Rc<Environment>>) -> Self {
+        Environment {
+            data: Default::default(),
+            parent,
+        }
+    }
+
+    fn get(&self, key: &str) -> Result<Value, Error> {
+        match self.data.borrow().get(key) {
+            Some(a) => Ok(a.clone()),
+            None => {
+                if let Some(parent) = &self.parent {
+                    parent.get(key)
+                } else {
+                    Err(RuntimeError::UnknownIdentifier(key.to_string()).into())
+                }
+            }
+        }
+    }
+
+    fn set(&self, key: &Rc<str>, value: Value) {
+        self.data
+            .as_ref()
+            .borrow_mut()
+            .insert(Rc::clone(key), value);
+    }
+}
 
 type CallStack = Vec<(usize, usize)>;
 pub struct BytecodeInterpreter {
@@ -30,6 +69,7 @@ pub(super) struct VirtualMachine {
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
     pub globals: HashMap<Rc<str>, Value>,
+    pub environment: Option<Rc<Environment>>,
 }
 impl VirtualMachine {
     pub(super) fn push_stack_p(&self) -> usize {
@@ -66,6 +106,11 @@ impl VirtualMachine {
                 Some(value) => value.clone(),
                 None => return Err(RuntimeError::UnknownIdentifier(name.to_string()).into()),
             },
+            Source::Env(name) => self
+                .environment
+                .as_ref()
+                .expect("Attempted to access Env with no dynamic environment")
+                .get(name)?,
         })
     }
 
@@ -100,6 +145,11 @@ impl VirtualMachine {
                 }
                 GlobalVariable::Unknown => unreachable!(),
             },
+            Source::Env(name) => self
+                .environment
+                .as_ref()
+                .expect("Attempted to access Env with no dynamic environment")
+                .set(name, self.result.take()),
         };
         Ok(())
     }
@@ -212,7 +262,6 @@ impl BytecodeInterpreter {
                     break;
                 }
             }
-            // println!("{:?}", vm.local);
             // println!(
             //     "procedure: {}; ip: {}; {:?}",
             //     procedure_index, vm.ip, program[vm.ip]
@@ -253,6 +302,14 @@ impl BytecodeInterpreter {
             Instruction::Unary { op, src0 } => {
                 vm.result.set(Value::unary_operation(*op, vm.fetch(src0)?)?);
             }
+            Instruction::FunctionLiteral {
+                arity,
+                procedure_id,
+            } => vm.result.set(Value::Function(FunctionObject::Lambda {
+                arity: *arity,
+                procedure_id: *procedure_id,
+                capture: Rc::new(Environment::new(vm.environment.clone())),
+            })),
             Instruction::CreateScope { locals } => vm.alloc_locals(*locals),
             Instruction::DestroyScope { locals } => vm.dealloc_locals(*locals),
             Instruction::JumpTrue { jump_dest } => {
@@ -276,12 +333,14 @@ impl BytecodeInterpreter {
                 FunctionObject::Lambda {
                     arity,
                     procedure_id: code,
+                    capture,
                 } => {
                     if arity != *argc {
                         return Err(RuntimeError::ExpectedArgumentsFound(arity, *argc).into());
                     }
                     call_stack.push((vm.ip + 1, code));
                     vm.ip = 0;
+                    vm.environment = Some(capture);
                     return Ok(true);
                 }
                 FunctionObject::Intrinsic(intrinsic) => {

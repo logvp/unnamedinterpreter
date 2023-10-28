@@ -60,9 +60,7 @@ impl<'a> BytecodeCompiler<'a> {
                 Some(LocalVariable::Local { index, .. }) => {
                     return Source::Local(index.unwrap() + parent_depth);
                 }
-                Some(LocalVariable::Captured { .. }) => {
-                    todo!("Captured variables are not yet supported")
-                }
+                Some(LocalVariable::Captured { .. }) => return Source::Env(name),
                 None => parent_depth += self.variables.get_num_locals_in_scope(scope),
             }
             scope = self.variables.parent_of(scope);
@@ -268,11 +266,9 @@ impl<'a> BytecodeCompiler<'a> {
                 });
                 self.pop_procedure();
                 // end the function compilation, now push the function object to the Result
-                self.push_instruction(Instruction::Nullary {
-                    src: Source::Immediate(Value::Function(FunctionObject::Lambda {
-                        arity: parameters.len(),
-                        procedure_id,
-                    })),
+                self.push_instruction(Instruction::FunctionLiteral {
+                    arity: parameters.len(),
+                    procedure_id,
                 });
                 Ok(())
             }
