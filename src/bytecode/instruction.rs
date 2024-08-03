@@ -42,8 +42,6 @@ pub enum Instruction {
     UnconditionalJump {
         jump_dest: usize,
     },
-    // With, // TODO
-    // New,  // TODO
     CreateScope {
         locals: usize,
     },

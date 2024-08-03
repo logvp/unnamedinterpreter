@@ -271,7 +271,6 @@ impl<'a> BytecodeCompiler<'a> {
                 });
                 Ok(())
             }
-            x => todo!("Compiling {:?} is not implemented yet", x),
         }
     }
 

@@ -137,15 +137,15 @@ impl Parser {
         } else {
             match self.token() {
                 TokenKind::Literal(_) => {
-                    let TokenKind::Literal(x) = self.consume() else {unreachable!() };
+                    let TokenKind::Literal(x) = self.consume() else {
+                        unreachable!()
+                    };
                     Expression::Literal(x)
                 }
                 TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
                 TokenKind::LeftParen => self.parse_parenthetical_expression(ort)?,
                 TokenKind::If => self.parse_if_expression()?,
                 TokenKind::While => self.parse_while_expression()?,
-                TokenKind::With => self.parse_with_expression()?,
-                TokenKind::New => self.parse_new_expression()?,
                 TokenKind::Lambda => self.parse_lambda_expression()?,
                 TokenKind::LeftBrace => {
                     Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
@@ -168,7 +168,9 @@ impl Parser {
                 continue;
             }
 
-            let Some(op) = Self::convert_infix_operator(self.token()) else { break; };
+            let Some(op) = Self::convert_infix_operator(self.token()) else {
+                break;
+            };
 
             let (l_pow, r_pow) = Self::infix_power(op);
             if l_pow == min_pow {
@@ -273,19 +275,6 @@ impl Parser {
         let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
         let body = self.parse_braced_block(Construct::WhileBody)?;
         Ok(Expression::While(Box::new(cond), body))
-    }
-
-    fn parse_with_expression(&mut self) -> Result<Expression, Error> {
-        self.expect(TokenKind::With, Construct::With)?;
-        let object = self.parse_parenthetical_expression(Construct::With)?;
-        let body = self.parse_braced_block(Construct::With)?;
-        Ok(Expression::With(Box::new(object), body))
-    }
-
-    fn parse_new_expression(&mut self) -> Result<Expression, Error> {
-        self.expect(TokenKind::New, Construct::NewBlock)?;
-        let body = self.parse_braced_block(Construct::NewBlock)?;
-        Ok(Expression::New(body))
     }
 
     fn parse_lambda_expression(&mut self) -> Result<Expression, Error> {

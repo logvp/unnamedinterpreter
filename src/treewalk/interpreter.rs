@@ -106,22 +106,6 @@ impl Eval for Expression {
                 }
                 ret
             }
-            Self::With(with, body) => {
-                let arg = with.eval(ctx)?;
-                if let RuntimeValue::Object(Object(obj_ctx)) = arg {
-                    body.eval_with_context(obj_ctx)?
-                } else {
-                    Err(RuntimeError::ExpectedButFound(
-                        RuntimeType::Object,
-                        arg.get_type(),
-                    ))?
-                }
-            }
-            Self::New(block) => {
-                let ctx = Rc::new(Context::new(ctx));
-                block.eval_with_context(Rc::clone(&ctx))?;
-                RuntimeValue::Object(Object(ctx))
-            }
             Self::Literal(lit) => lit.eval(ctx)?,
             Self::Variable(identifier) => identifier.eval(ctx)?,
             Self::Block(block) => block.eval(ctx)?,

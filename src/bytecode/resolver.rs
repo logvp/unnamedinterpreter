@@ -342,7 +342,6 @@ impl Resolver {
                 self.closure_boundary = saved_closure_boundary;
                 self.pop_scope();
             }
-            x => todo!("Resolving {:?} is not implemented yet", x),
         }
         Ok(())
     }
