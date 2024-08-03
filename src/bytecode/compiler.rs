@@ -8,6 +8,7 @@ use crate::{
 use super::{
     instruction::{Instruction, Source},
     resolver::{LocalVariable, ResolutionTable},
+    typechecker::TypeChecker,
     value::Value,
 };
 
@@ -41,6 +42,7 @@ impl<'a> BytecodeCompiler<'a> {
         start_index: usize,
         variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
+        TypeChecker::check(&ast, variables)?;
         let mut compiler = BytecodeCompiler::new(start_index, variables);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;
