@@ -1,9 +1,6 @@
-use crate::{
-    ast::{Ast, AstNode, BinaryOperator, Block, Expression, Literal, Statement, UnaryOperator},
-    error::Error,
+use crate::ast::{
+    Ast, AstNode, BinaryOperator, Block, Expression, Literal, Statement, UnaryOperator,
 };
-
-use super::resolver::ResolutionTable;
 
 #[derive(Debug)]
 enum Type {
@@ -27,7 +24,11 @@ impl PartialEq for Type {
 }
 
 #[derive(Debug)]
-pub struct TypeError {}
+pub enum TypeError {
+    ExpectedButFound(Type, Type),
+    UnopExpectsButFound(UnaryOperator, Type, Type),
+    BinopExpectsButFound(BinaryOperator, Type, Type, Type),
+}
 
 pub struct TypeChecker {}
 
@@ -36,7 +37,7 @@ impl TypeChecker {
         TypeChecker {}
     }
 
-    pub fn check(ast: &Ast, _variables: &ResolutionTable) -> Result<(), TypeError> {
+    pub fn check(ast: &Ast) -> Result<(), TypeError> {
         let mut checker = TypeChecker::new();
         for node in ast.iter() {
             checker.check_node(node)?;
@@ -78,7 +79,12 @@ impl TypeChecker {
                 if lhs_t == Type::Integer && rhs_t == Type::Integer {
                     Ok(Type::Boolean)
                 } else {
-                    Err(TypeError {})
+                    Err(TypeError::BinopExpectsButFound(
+                        op,
+                        Type::Integer,
+                        lhs_t,
+                        rhs_t,
+                    ))
                 }
             }
             BinaryOperator::Add
@@ -88,14 +94,24 @@ impl TypeChecker {
                 if lhs_t == Type::Integer && rhs_t == Type::Integer {
                     Ok(Type::Integer)
                 } else {
-                    Err(TypeError {})
+                    Err(TypeError::BinopExpectsButFound(
+                        op,
+                        Type::Integer,
+                        lhs_t,
+                        rhs_t,
+                    ))
                 }
             }
             BinaryOperator::Concatenate => {
                 if lhs_t == Type::String && rhs_t == Type::String {
                     Ok(Type::String)
                 } else {
-                    Err(TypeError {})
+                    Err(TypeError::BinopExpectsButFound(
+                        op,
+                        Type::String,
+                        lhs_t,
+                        rhs_t,
+                    ))
                 }
             }
         }
@@ -108,7 +124,7 @@ impl TypeChecker {
                 if e_t == Type::Integer {
                     Ok(Type::Integer)
                 } else {
-                    Err(TypeError {})
+                    Err(TypeError::UnopExpectsButFound(op, Type::Integer, e_t))
                 }
             }
         }
@@ -141,7 +157,7 @@ impl TypeChecker {
                 if type_a == type_b {
                     Ok(type_a)
                 } else {
-                    panic!("if statement type mismatch")
+                    Err(TypeError::ExpectedButFound(type_a, type_b))
                 }
             }
             Expression::FunctionCall(func, args) => {
@@ -153,12 +169,14 @@ impl TypeChecker {
                 match func_t {
                     Type::ExperimentalAny => Ok(Type::ExperimentalAny),
                     Type::Function(from, to) if from.as_ref() == args_t.as_slice() => Ok(*to),
-                    _ => panic!(),
+                    _ => Err(TypeError::ExpectedButFound(
+                        Type::Function(args_t.into(), Box::new(Type::ExperimentalAny)),
+                        func_t,
+                    )),
                 }
             }
             Expression::Unary(op, e) => self.check_unary(*op, e),
             Expression::Block(block) => self.check_block(block),
-            e => todo!("{e:?}"),
         }
     }
 

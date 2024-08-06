@@ -42,7 +42,7 @@ impl<'a> BytecodeCompiler<'a> {
         start_index: usize,
         variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
-        TypeChecker::check(&ast, variables).unwrap();
+        TypeChecker::check(&ast)?;
         let mut compiler = BytecodeCompiler::new(start_index, variables);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;

@@ -1,4 +1,5 @@
-use crate::ast::{BinaryOperator, Construct};
+use crate::ast::{BinaryOperator, Construct, UnaryOperator};
+use crate::bytecode::typechecker::TypeError;
 use crate::interpreter::RuntimeType;
 use crate::lexer;
 use std::fmt::Display;
@@ -44,6 +45,7 @@ impl Loc {
 pub enum Error {
     Lexer(LexicalError),
     Syntax(SyntaxError),
+    Type(TypeError),
     Runtime(RuntimeError),
 }
 impl From<LexicalError> for Error {
@@ -61,11 +63,17 @@ impl From<RuntimeError> for Error {
         Error::Runtime(e)
     }
 }
+impl From<TypeError> for Error {
+    fn from(e: TypeError) -> Self {
+        Error::Type(e)
+    }
+}
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Lexer(e) => write!(f, "{}", e),
             Self::Syntax(e) => write!(f, "{}", e),
+            Self::Type(e) => write!(f, "{:?}", e),
             Self::Runtime(e) => write!(f, "{}", e),
         }
     }
