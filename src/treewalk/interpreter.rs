@@ -5,6 +5,7 @@ use crate::ast::*;
 use crate::error::{Error, RuntimeError};
 use crate::interpreter::{Interpreter, RuntimeType};
 use crate::parser::Parser;
+use crate::visitor::AstVisitor;
 
 use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
 use super::RuntimeValue;
@@ -40,7 +41,7 @@ impl Interpreter for TreeWalkInterpreter {
 }
 impl TreeWalkInterpreter {
     fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
-        node.eval(Rc::clone(&self.context))
+        self.visit_node(node)
     }
 }
 
@@ -244,5 +245,85 @@ impl Eval for Identifier {
             Some(Variable { val, .. }) => Ok(val),
             None => Err(RuntimeError::UnknownIdentifier(self.name.to_string()).into()),
         }
+    }
+}
+
+impl AstVisitor for TreeWalkInterpreter {
+    type Good = RuntimeValue;
+    type Bad = Error;
+
+    fn visit_variable(&mut self, var: &Identifier) -> Result<Self::Good, Self::Bad> {
+        var.eval(self.context.clone())
+    }
+
+    fn visit_literal(&mut self, lit: &Literal) -> Result<Self::Good, Self::Bad> {
+        lit.eval(self.context.clone())
+    }
+
+    fn visit_block(&mut self, block: &Block) -> Result<Self::Good, Self::Bad> {
+        block.eval(self.context.clone())
+    }
+
+    fn visit_binary(
+        &mut self,
+        op: BinaryOperator,
+        lhs: &Expression,
+        rhs: &Expression,
+    ) -> Result<Self::Good, Self::Bad> {
+        do_binary_operation(op, lhs, rhs, self.context.clone())
+    }
+
+    fn visit_unary(&mut self, op: UnaryOperator, e: &Expression) -> Result<Self::Good, Self::Bad> {
+        do_unary_operation(op, e, self.context.clone())
+    }
+
+    fn visit_statement(&mut self, s: &Statement) -> Result<Self::Good, Self::Bad> {
+        s.eval(self.context.clone())
+    }
+
+    fn visit_declaration(
+        &mut self,
+        _id: &Identifier,
+        _e: &Expression,
+        _is_const: bool,
+    ) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
+    }
+
+    fn visit_assignment(&mut self, _id: &Lvalue, _e: &Expression) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
+    }
+
+    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::Good, Self::Bad> {
+        expr.eval(self.context.clone())
+    }
+
+    fn visit_if_else(
+        &mut self,
+        _cond: &Expression,
+        _if_true: &Block,
+        _if_false: &Block,
+    ) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
+    }
+
+    fn visit_while(&mut self, _cond: &Expression, _body: &Block) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
+    }
+
+    fn visit_function_call(
+        &mut self,
+        _func: &Expression,
+        _args: &[Expression],
+    ) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
+    }
+
+    fn visit_lambda(
+        &mut self,
+        _params: &[Identifier],
+        _body: &Block,
+    ) -> Result<Self::Good, Self::Bad> {
+        unimplemented!()
     }
 }
