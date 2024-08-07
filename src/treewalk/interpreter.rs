@@ -27,224 +27,16 @@ impl Interpreter for TreeWalkInterpreter {
         text: &str,
         filename: Option<Rc<str>>,
     ) -> Vec<Result<RuntimeValue, Error>> {
-        let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
+        let mut ret = Vec::new();
         match Parser::gen_ast(text, filename) {
             Ok(ast) => {
                 for node in ast.iter() {
-                    ret.push(self.interpret_node(node));
+                    ret.push(self.visit_node(node));
                 }
             }
             Err(e) => ret.push(Err(e)),
         }
         ret
-    }
-}
-impl TreeWalkInterpreter {
-    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
-        self.visit_node(node)
-    }
-}
-
-trait Eval {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error>;
-}
-
-impl Eval for AstNode {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match self {
-            Self::Statement(statement) => statement.eval(ctx),
-            Self::Expression(expr) => expr.eval(ctx),
-        }
-    }
-}
-
-impl Eval for Statement {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match self {
-            Self::Declaration(lhs, rhs, is_const) => {
-                if !ctx.contains_in_scope(&lhs.name) {
-                    let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.declare(lhs.name.to_string(), value, *is_const);
-                } else {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
-                }
-            }
-            Self::Assignment(lhs, rhs) => {
-                if ctx.contains(lhs.name().unwrap().as_ref()) {
-                    let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.update(lhs.name().unwrap().to_string(), value)?;
-                } else {
-                    Err(RuntimeError::UnknownIdentifier(
-                        lhs.name().unwrap().to_string(),
-                    ))?
-                }
-            }
-            Self::Expression(expr) => {
-                expr.eval(ctx)?;
-            }
-        };
-        Ok(RuntimeValue::None)
-    }
-}
-
-impl Eval for Expression {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        Ok(match self {
-            Self::Binary(op, lhs, rhs) => do_binary_operation(*op, lhs, rhs, ctx)?,
-            Self::Unary(op, erand) => do_unary_operation(*op, erand, ctx)?,
-
-            Self::IfElse(cond, body, else_block) => {
-                if cond.eval(Rc::clone(&ctx))?.boolean()? {
-                    body.eval(ctx)?
-                } else {
-                    else_block.eval(ctx)?
-                }
-            }
-            Self::While(cond, body) => {
-                let mut ret = RuntimeValue::None;
-                while cond.eval(Rc::clone(&ctx))?.boolean()? {
-                    ret = body.eval(Rc::clone(&ctx))?;
-                }
-                ret
-            }
-            Self::Literal(lit) => lit.eval(ctx)?,
-            Self::Variable(identifier) => identifier.eval(ctx)?,
-            Self::Block(block) => block.eval(ctx)?,
-            Self::Lambda(param, body) => {
-                RuntimeValue::Function(Rc::new(FunctionType::Lambda(Lambda {
-                    parent_scope: ctx,
-                    parameters: Rc::clone(param),
-                    body: body.clone(),
-                })))
-            }
-            Self::FunctionCall(fun, args) => do_function_call(
-                fun.eval(Rc::clone(&ctx))?,
-                args.iter()
-                    .map(|x| x.eval(Rc::clone(&ctx)))
-                    .collect::<Result<Vec<RuntimeValue>, _>>()?,
-            )?,
-        })
-    }
-}
-
-fn do_binary_operation(
-    op: BinaryOperator,
-    lhs: &Expression,
-    rhs: &Expression,
-    ctx: Rc<Context>,
-) -> Result<RuntimeValue, Error> {
-    Ok(match op {
-        BinaryOperator::Equal => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))? == rhs.eval(ctx)?)
-        }
-        BinaryOperator::NotEqual => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))? != rhs.eval(ctx)?)
-        }
-        BinaryOperator::LessThan => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? < rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::LessEqual => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? <= rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::GreaterThan => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? > rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::GreaterEqual => {
-            RuntimeValue::Boolean(lhs.eval(Rc::clone(&ctx))?.int()? >= rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::Add => {
-            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? + rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::Subtract => {
-            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? - rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::Multiply => {
-            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? * rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::Divide => {
-            RuntimeValue::Integer(lhs.eval(Rc::clone(&ctx))?.int()? / rhs.eval(ctx)?.int()?)
-        }
-        BinaryOperator::Concatenate => RuntimeValue::String(format!(
-            "{}{}",
-            lhs.eval(Rc::clone(&ctx))?.string()?,
-            rhs.eval(ctx)?.string()?
-        )),
-    })
-}
-
-fn do_unary_operation(
-    op: UnaryOperator,
-    erand: &Expression,
-    ctx: Rc<Context>,
-) -> Result<RuntimeValue, Error> {
-    match op {
-        UnaryOperator::Negate => Ok(RuntimeValue::Integer(-erand.eval(ctx)?.int()?)),
-    }
-}
-
-fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<RuntimeValue, Error> {
-    match fun {
-        RuntimeValue::Function(f) => {
-            match f.borrow() {
-                FunctionType::Lambda(Lambda {
-                    parent_scope,
-                    parameters,
-                    body,
-                }) => {
-                    let scope = Context::new(Rc::clone(parent_scope));
-                    if parameters.len() != args.len() {
-                        Err(RuntimeError::ExpectedArgumentsFound(
-                            parameters.len(),
-                            args.len(),
-                        ))?
-                    }
-                    // Bind arguments to parameter names
-                    for (ident, val) in parameters.iter().zip(args.into_iter()) {
-                        scope.declare(ident.name.to_string(), val, false);
-                    }
-
-                    body.eval(Rc::new(scope))
-                }
-                FunctionType::Intrinsic(f) => f.call(args),
-            }
-        }
-        x => Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into()),
-    }
-}
-
-impl Eval for Block {
-    fn eval(&self, parent: Rc<Context>) -> Result<RuntimeValue, Error> {
-        let ctx = Rc::new(Context::new(parent));
-        self.eval_with_context(ctx)
-    }
-}
-impl Block {
-    fn eval_with_context(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        let Self(nodes) = self;
-        let mut ret = RuntimeValue::None;
-        for node in nodes.iter() {
-            ret = node.eval(Rc::clone(&ctx))?;
-        }
-        Ok(ret)
-    }
-}
-
-impl Eval for Literal {
-    fn eval(&self, _: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match self {
-            Self::Integer(int) => Ok(RuntimeValue::Integer(*int)),
-            Self::String(string) => Ok(RuntimeValue::String(string.to_string())), // STRING_ALLOCATION
-            Self::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
-        }
-    }
-}
-
-impl Eval for Identifier {
-    fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match ctx.get(&self.name) {
-            Some(Variable { val, .. }) => Ok(val),
-            None => Err(RuntimeError::UnknownIdentifier(self.name.to_string()).into()),
-        }
     }
 }
 
@@ -253,15 +45,30 @@ impl AstVisitor for TreeWalkInterpreter {
     type Bad = Error;
 
     fn visit_variable(&mut self, var: &Identifier) -> Result<Self::Good, Self::Bad> {
-        var.eval(self.context.clone())
+        match self.context.get(&var.name) {
+            Some(Variable { val, .. }) => Ok(val),
+            None => Err(RuntimeError::UnknownIdentifier(var.name.to_string()).into()), // Allocation
+        }
     }
 
     fn visit_literal(&mut self, lit: &Literal) -> Result<Self::Good, Self::Bad> {
-        lit.eval(self.context.clone())
+        match lit {
+            Literal::Integer(int) => Ok(RuntimeValue::Integer(*int)),
+            Literal::String(string) => Ok(RuntimeValue::String(string.to_string())), // Allocation
+            Literal::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
+        }
     }
 
     fn visit_block(&mut self, block: &Block) -> Result<Self::Good, Self::Bad> {
-        block.eval(self.context.clone())
+        let mut ctx = Self {
+            context: Rc::new(Context::new(self.context.clone())),
+        };
+        let Block(nodes) = block;
+        let mut ret = RuntimeValue::None;
+        for node in nodes.iter() {
+            ret = ctx.visit_node(node)?;
+        }
+        Ok(ret)
     }
 
     fn visit_binary(
@@ -270,60 +77,171 @@ impl AstVisitor for TreeWalkInterpreter {
         lhs: &Expression,
         rhs: &Expression,
     ) -> Result<Self::Good, Self::Bad> {
-        do_binary_operation(op, lhs, rhs, self.context.clone())
+        Ok(match op {
+            BinaryOperator::Equal => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)? == self.visit_expr(rhs)?)
+            }
+            BinaryOperator::NotEqual => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)? != self.visit_expr(rhs)?)
+            }
+            BinaryOperator::LessThan => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)?.int()? < self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::LessEqual => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)?.int()? <= self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::GreaterThan => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)?.int()? > self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::GreaterEqual => {
+                RuntimeValue::Boolean(self.visit_expr(lhs)?.int()? >= self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::Add => {
+                RuntimeValue::Integer(self.visit_expr(lhs)?.int()? + self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::Subtract => {
+                RuntimeValue::Integer(self.visit_expr(lhs)?.int()? - self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::Multiply => {
+                RuntimeValue::Integer(self.visit_expr(lhs)?.int()? * self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::Divide => {
+                RuntimeValue::Integer(self.visit_expr(lhs)?.int()? / self.visit_expr(rhs)?.int()?)
+            }
+            BinaryOperator::Concatenate => RuntimeValue::String(format!(
+                "{}{}",
+                self.visit_expr(lhs)?.string()?,
+                self.visit_expr(rhs)?.string()?
+            )),
+        })
     }
 
     fn visit_unary(&mut self, op: UnaryOperator, e: &Expression) -> Result<Self::Good, Self::Bad> {
-        do_unary_operation(op, e, self.context.clone())
+        match op {
+            UnaryOperator::Negate => Ok(RuntimeValue::Integer(-self.visit_expr(e)?.int()?)),
+        }
     }
 
     fn visit_statement(&mut self, s: &Statement) -> Result<Self::Good, Self::Bad> {
-        s.eval(self.context.clone())
+        match s {
+            Statement::Declaration(lhs, rhs, is_const) => {
+                self.visit_declaration(lhs, rhs, *is_const)
+            }
+            Statement::Assignment(lhs, rhs) => self.visit_assignment(lhs, rhs),
+            Statement::Expression(expr) => {
+                self.visit_expr(expr)?;
+                Ok(RuntimeValue::None)
+            }
+        }
     }
 
     fn visit_declaration(
         &mut self,
-        _id: &Identifier,
-        _e: &Expression,
-        _is_const: bool,
+        lhs: &Identifier,
+        rhs: &Expression,
+        is_const: bool,
     ) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
+        if !self.context.contains_in_scope(&lhs.name) {
+            let value = self.visit_expr(rhs)?;
+            self.context.declare(lhs.name.to_string(), value, is_const);
+        } else {
+            Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
+        }
+        Ok(RuntimeValue::None)
     }
 
-    fn visit_assignment(&mut self, _id: &Lvalue, _e: &Expression) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
-    }
-
-    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::Good, Self::Bad> {
-        expr.eval(self.context.clone())
+    fn visit_assignment(
+        &mut self,
+        lhs: &Lvalue,
+        rhs: &Expression,
+    ) -> Result<Self::Good, Self::Bad> {
+        if self.context.contains(lhs.name().unwrap().as_ref()) {
+            let value = self.visit_expr(rhs)?;
+            self.context
+                .update(lhs.name().unwrap().to_string(), value)?;
+        } else {
+            Err(RuntimeError::UnknownIdentifier(
+                lhs.name().unwrap().to_string(),
+            ))?
+        }
+        Ok(RuntimeValue::None)
     }
 
     fn visit_if_else(
         &mut self,
-        _cond: &Expression,
-        _if_true: &Block,
-        _if_false: &Block,
+        cond: &Expression,
+        if_true: &Block,
+        if_false: &Block,
     ) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
+        if self.visit_expr(cond)?.boolean()? {
+            self.visit_block(if_true)
+        } else {
+            self.visit_block(if_false)
+        }
     }
 
-    fn visit_while(&mut self, _cond: &Expression, _body: &Block) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
+    fn visit_while(&mut self, cond: &Expression, body: &Block) -> Result<Self::Good, Self::Bad> {
+        let mut ret = RuntimeValue::None;
+        while self.visit_expr(cond)?.boolean()? {
+            ret = self.visit_block(body)?;
+        }
+        Ok(ret)
     }
 
     fn visit_function_call(
         &mut self,
-        _func: &Expression,
-        _args: &[Expression],
+        func: &Expression,
+        args: &[Expression],
     ) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
+        let func = self.visit_expr(func)?;
+        let args = args
+            .iter()
+            .map(|x| self.visit_expr(x))
+            .collect::<Result<Vec<RuntimeValue>, _>>()?;
+        match func {
+            RuntimeValue::Function(f) => {
+                match f.borrow() {
+                    FunctionType::Lambda(Lambda {
+                        parent_scope,
+                        parameters,
+                        body,
+                    }) => {
+                        let scope = Context::new(Rc::clone(parent_scope));
+                        if parameters.len() != args.len() {
+                            Err(RuntimeError::ExpectedArgumentsFound(
+                                parameters.len(),
+                                args.len(),
+                            ))?
+                        }
+                        // Bind arguments to parameter names
+                        for (ident, val) in parameters.iter().zip(args.into_iter()) {
+                            scope.declare(ident.name.to_string(), val, false);
+                        }
+
+                        let mut ctx = Self {
+                            context: Rc::new(scope),
+                        };
+
+                        ctx.visit_block(body)
+                    }
+                    FunctionType::Intrinsic(f) => f.call(args),
+                }
+            }
+            x => Err(RuntimeError::ExpectedButFound(RuntimeType::Function, x.get_type()).into()),
+        }
     }
 
     fn visit_lambda(
         &mut self,
-        _params: &[Identifier],
-        _body: &Block,
+        params: &[Identifier],
+        body: &Block,
     ) -> Result<Self::Good, Self::Bad> {
-        unimplemented!()
+        Ok(RuntimeValue::Function(Rc::new(FunctionType::Lambda(
+            Lambda {
+                parent_scope: self.context.clone(),
+                parameters: Rc::from(params), // Allocation
+                body: body.clone(),
+            },
+        ))))
     }
 }
