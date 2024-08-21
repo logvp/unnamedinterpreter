@@ -57,7 +57,7 @@ thread_local! {
 }
 impl Block {
     pub fn empty() -> Self {
-        Block(EMPTY_BLOCK_DATA.with(|x| x.clone()))
+        Block(EMPTY_BLOCK_DATA.with(Clone::clone))
     }
 }
 
@@ -109,7 +109,7 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> Option<Rc<str>> {
+    pub fn name(&self) -> Option<crate::String> {
         match self {
             Self::Identifier(ident) => Some(ident.name.clone()),
             // _ => None,
@@ -119,13 +119,13 @@ impl Lvalue {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Identifier {
-    pub name: Rc<str>,
+    pub name: crate::String,
 }
 
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(i32),
-    String(Rc<str>),
+    String(crate::String),
     Boolean(bool),
 }
 

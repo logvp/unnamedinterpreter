@@ -18,7 +18,7 @@ pub enum RuntimeValue {
     Object(Object),
     Function(Rc<FunctionType>),
     Integer(i32),
-    String(Rc<str>),
+    String(crate::String),
     Boolean(bool),
     None,
 }
@@ -68,9 +68,9 @@ impl RuntimeValue {
         }
     }
 
-    pub(super) fn string(&self) -> Result<&str, RuntimeError> {
+    pub(super) fn string(&self) -> Result<crate::String, RuntimeError> {
         if let Self::String(string) = self {
-            Ok(string)
+            Ok(string.clone())
         } else {
             Err(RuntimeError::ExpectedButFound(
                 RuntimeType::String,
@@ -126,7 +126,7 @@ pub(super) struct Variable {
 
 #[derive(Clone)]
 pub(super) struct Context {
-    data: RefCell<HashMap<Rc<str>, Variable>>,
+    data: RefCell<HashMap<crate::String, Variable>>,
     parent: Option<Rc<Self>>,
 }
 impl Context {
@@ -154,7 +154,7 @@ impl Context {
         global
     }
 
-    pub(super) fn is_const(&self, key: &str) -> Option<bool> {
+    pub(super) fn is_const(&self, key: &crate::String) -> Option<bool> {
         if self.data.borrow().contains_key(key) {
             Some(self.data.borrow().get(key).unwrap().is_const)
         } else if let Some(parent) = &self.parent {
@@ -164,7 +164,7 @@ impl Context {
         }
     }
 
-    pub(super) fn contains(&self, key: &str) -> bool {
+    pub(super) fn contains(&self, key: &crate::String) -> bool {
         if self.data.borrow().contains_key(key) {
             true
         } else if let Some(parent) = &self.parent {
@@ -174,11 +174,11 @@ impl Context {
         }
     }
 
-    pub(super) fn contains_in_scope(&self, key: &str) -> bool {
+    pub(super) fn contains_in_scope(&self, key: &crate::String) -> bool {
         self.data.borrow().contains_key(key)
     }
 
-    pub(super) fn declare(&self, key: Rc<str>, val: RuntimeValue, is_const: bool) {
+    pub(super) fn declare(&self, key: crate::String, val: RuntimeValue, is_const: bool) {
         let None = self
             .data
             .borrow_mut()
@@ -188,10 +188,10 @@ impl Context {
         };
     }
 
-    pub(super) fn update(&self, key: Rc<str>, val: RuntimeValue) -> Result<(), RuntimeError> {
+    pub(super) fn update(&self, key: crate::String, val: RuntimeValue) -> Result<(), RuntimeError> {
         if self.contains_in_scope(&key) {
             if self.is_const(&key).unwrap() {
-                Err(RuntimeError::ConstReassignment(key.to_string()))
+                Err(RuntimeError::ConstReassignment(key))
             } else {
                 let var = Variable {
                     val,
@@ -203,11 +203,11 @@ impl Context {
         } else if let Some(parent) = &self.parent {
             parent.update(key, val)
         } else {
-            Err(RuntimeError::UnknownIdentifier(key.to_string()))
+            Err(RuntimeError::UnknownIdentifier(key))
         }
     }
 
-    pub(super) fn get(&self, key: &str) -> Option<Variable> {
+    pub(super) fn get(&self, key: &crate::String) -> Option<Variable> {
         self.data
             .borrow()
             .get(key)

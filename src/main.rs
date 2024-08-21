@@ -5,6 +5,7 @@ mod interpreter;
 mod lexer;
 mod parser;
 mod repl;
+mod string;
 mod treewalk;
 mod visitor;
 
@@ -13,8 +14,11 @@ use std::{env, io};
 use bytecode::interpreter::BytecodeInterpreter;
 #[cfg(test)]
 use interpreter::Interpreter;
+use treewalk::TreeWalkInterpreter;
 
-type InterpreterImpl = BytecodeInterpreter;
+type InterpreterImpl = TreeWalkInterpreter;
+
+pub use string::String;
 
 fn main() -> io::Result<()> {
     let filename = env::args().nth(1);

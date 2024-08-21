@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
@@ -26,13 +26,13 @@ pub(super) enum GlobalVariable {
 pub struct Scope {
     num_locals: usize,
     parent: usize,
-    data: HashMap<Rc<str>, LocalVariable>,
+    data: HashMap<crate::String, LocalVariable>,
 }
 
 #[derive(Default)]
 pub(super) struct ResolutionTable {
     local_scopes: Vec<Scope>,
-    global_scope: HashMap<Rc<str>, GlobalVariable>,
+    global_scope: HashMap<crate::String, GlobalVariable>,
 }
 impl ResolutionTable {
     pub fn parent_of(&self, scope: usize) -> usize {
@@ -50,7 +50,7 @@ impl ResolutionTable {
     fn make_declaration(
         &mut self,
         scope: usize,
-        ident: Rc<str>,
+        ident: crate::String,
         is_const: bool,
     ) -> Result<(), Error> {
         let redeclaration = if scope > 0 {
@@ -80,14 +80,14 @@ impl ResolutionTable {
             }
         };
         if redeclaration {
-            return Err(RuntimeError::VariableRedeclaration(ident.to_string()).into());
+            return Err(RuntimeError::VariableRedeclaration(ident.clone()).into());
         }
         Ok(())
     }
 
     fn make_assignment(
         &mut self,
-        ident: Rc<str>,
+        ident: crate::String,
         scope: usize,
         closure_boundary: usize,
     ) -> Result<(), Error> {
@@ -102,11 +102,11 @@ impl ResolutionTable {
                 Some(
                     LocalVariable::Local { is_const: true, .. }
                     | LocalVariable::Captured { is_const: true },
-                ) => return Err(RuntimeError::ConstReassignment(ident.to_string()).into()),
+                ) => return Err(RuntimeError::ConstReassignment(ident.clone()).into()),
                 None => match self.global_scope.get(&ident) {
                     Some(GlobalVariable::NotConstant) | Some(GlobalVariable::Unknown) => {}
                     Some(GlobalVariable::Constant) => {
-                        return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
+                        return Err(RuntimeError::ConstReassignment(ident.clone()).into())
                     }
                     None => self.found_unknown_variable(ident, closure_boundary > 0)?,
                 },
@@ -115,7 +115,7 @@ impl ResolutionTable {
             match self.global_scope.get(&ident) {
                 Some(GlobalVariable::NotConstant) => {}
                 Some(GlobalVariable::Constant) => {
-                    return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
+                    return Err(RuntimeError::ConstReassignment(ident.clone()).into())
                 }
                 Some(GlobalVariable::Unknown) | None => {
                     self.found_unknown_variable(ident, closure_boundary > 0)?
@@ -125,18 +125,22 @@ impl ResolutionTable {
         Ok(())
     }
 
-    fn found_unknown_variable(&mut self, ident: Rc<str>, in_a_closure: bool) -> Result<(), Error> {
+    fn found_unknown_variable(
+        &mut self,
+        ident: crate::String,
+        in_a_closure: bool,
+    ) -> Result<(), Error> {
         if in_a_closure {
             // it could be a global that has not been defined yet, but will be before this closure is called
             match self
                 .global_scope
-                .insert(Rc::clone(&ident), GlobalVariable::Unknown)
+                .insert(ident.clone(), GlobalVariable::Unknown)
             {
                 Some(GlobalVariable::Unknown) | None => Ok(()),
                 Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
             }
         } else {
-            Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
+            Err(RuntimeError::UnknownIdentifier(ident.clone()).into())
         }
     }
 
@@ -156,18 +160,18 @@ impl ResolutionTable {
         self.local_scopes[scope - 1].num_locals
     }
 
-    pub fn lookup_global(&self, ident: &str) -> Result<GlobalVariable, Error> {
+    pub fn lookup_global(&self, ident: &crate::String) -> Result<GlobalVariable, Error> {
         match self.global_scope.get(ident) {
             Some(a @ (GlobalVariable::NotConstant | GlobalVariable::Constant)) => Ok(*a),
             Some(GlobalVariable::Unknown) | None => {
-                Err(RuntimeError::UnknownIdentifier(ident.to_string()).into())
+                Err(RuntimeError::UnknownIdentifier(ident.clone()).into())
             }
         }
     }
 
     pub fn get_local_and_capture(
         &mut self,
-        ident: &str,
+        ident: &crate::String,
         mut scope: usize,
         closure_boundary: usize,
     ) -> Option<LocalVariable> {
@@ -186,7 +190,11 @@ impl ResolutionTable {
         None
     }
 
-    pub fn lookup_local_in_scope(&self, ident: &str, scope: usize) -> Option<LocalVariable> {
+    pub fn lookup_local_in_scope(
+        &self,
+        ident: &crate::String,
+        scope: usize,
+    ) -> Option<LocalVariable> {
         if scope == 0 {
             return None;
         }
@@ -230,10 +238,10 @@ impl Resolver {
         self.current_scope > 0
     }
 
-    pub fn define_globals(&mut self, identifiers: &[Rc<str>]) {
+    pub fn define_globals(&mut self, identifiers: &[crate::String]) {
         for ident in identifiers.iter() {
             self.scopes
-                .make_declaration(0, Rc::clone(ident), false)
+                .make_declaration(0, ident.clone(), false)
                 .unwrap()
         }
     }
@@ -246,7 +254,7 @@ impl Resolver {
         //     if let GlobalVariable::Unknown = var {
         //         // should not error in REPL mode, but should in file compilation
         //         // also predefined globals like the intrinsic functions shouldn't err
-        //         // return Err(RuntimeError::UnknownIdentifier(name.to_string()).into());
+        //         // return Err(RuntimeError::UnknownIdentifier(name.clone()).into());
         //     }
         // }
         Ok(())
@@ -269,11 +277,8 @@ impl Resolver {
                 self.resolve_expr(expr)?;
             }
             Statement::Declaration(ident, expr, is_const) => {
-                self.scopes.make_declaration(
-                    self.current_scope,
-                    Rc::clone(&ident.name),
-                    *is_const,
-                )?;
+                self.scopes
+                    .make_declaration(self.current_scope, ident.name.clone(), *is_const)?;
                 self.resolve_expr(expr)?;
             }
             Statement::Expression(expr) => {
@@ -305,7 +310,7 @@ impl Resolver {
                     }
                     if self.scopes.lookup_global(name).is_err() {
                         self.scopes
-                            .found_unknown_variable(Rc::clone(name), self.closure_boundary > 0)?
+                            .found_unknown_variable(name.clone(), self.closure_boundary > 0)?
                     }
                 } else {
                     self.scopes.lookup_global(name)?;

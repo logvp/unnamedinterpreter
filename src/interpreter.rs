@@ -1,4 +1,4 @@
-use std::{fmt::Display, rc::Rc};
+use std::fmt::Display;
 
 use crate::error::Error;
 
@@ -10,7 +10,7 @@ pub trait Interpreter {
     fn interpret(
         &mut self,
         text: &str,
-        filename: Option<Rc<str>>,
+        filename: Option<crate::String>,
     ) -> Vec<Result<Self::ReplReturn, Error>>;
 }
 

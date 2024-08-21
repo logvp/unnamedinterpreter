@@ -20,7 +20,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    data: Rc<RefCell<HashMap<Rc<str>, Value>>>,
+    data: Rc<RefCell<HashMap<crate::String, Value>>>,
     parent: Option<Rc<Environment>>,
 }
 impl Environment {
@@ -31,24 +31,21 @@ impl Environment {
         }
     }
 
-    fn get(&self, key: &str) -> Result<Value, Error> {
+    fn get(&self, key: &crate::String) -> Result<Value, Error> {
         match self.data.borrow().get(key) {
             Some(a) => Ok(a.clone()),
             None => {
                 if let Some(parent) = &self.parent {
                     parent.get(key)
                 } else {
-                    Err(RuntimeError::UnknownIdentifier(key.to_string()).into())
+                    Err(RuntimeError::UnknownIdentifier(key.clone()).into())
                 }
             }
         }
     }
 
-    fn set(&self, key: &Rc<str>, value: Value) {
-        self.data
-            .as_ref()
-            .borrow_mut()
-            .insert(Rc::clone(key), value);
+    fn set(&self, key: &crate::String, value: Value) {
+        self.data.as_ref().borrow_mut().insert(key.clone(), value);
     }
 }
 
@@ -67,7 +64,7 @@ pub(super) struct VirtualMachine {
     pub stack_p: Cell<usize>,
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
-    pub globals: HashMap<Rc<str>, Value>,
+    pub globals: HashMap<crate::String, Value>,
     pub environment: Option<Rc<Environment>>,
 }
 impl VirtualMachine {
@@ -103,7 +100,7 @@ impl VirtualMachine {
             Source::Stack => self.stack.get(self.pop_stack_p()).unwrap().clone(),
             Source::Global(name) => match self.globals.get(name) {
                 Some(value) => value.clone(),
-                None => return Err(RuntimeError::UnknownIdentifier(name.to_string()).into()),
+                None => return Err(RuntimeError::UnknownIdentifier(name.clone()).into()),
             },
             Source::Env(name) => self
                 .environment
@@ -133,14 +130,14 @@ impl VirtualMachine {
             }
             Source::Global(name) => match variables.lookup_global(name)? {
                 GlobalVariable::Constant => {
-                    if self.globals.contains_key(name.as_ref()) {
-                        return Err(RuntimeError::ConstReassignment(name.to_string()).into());
+                    if self.globals.contains_key(name) {
+                        return Err(RuntimeError::ConstReassignment(name.clone()).into());
                     } else {
-                        self.globals.insert(Rc::clone(name), self.result.take());
+                        self.globals.insert(name.clone(), self.result.take());
                     }
                 }
                 GlobalVariable::NotConstant => {
-                    self.globals.insert(Rc::clone(name), self.result.take());
+                    self.globals.insert(name.clone(), self.result.take());
                 }
                 GlobalVariable::Unknown => unreachable!(),
             },
@@ -188,7 +185,7 @@ impl Interpreter for BytecodeInterpreter {
     fn interpret(
         &mut self,
         text: &str,
-        filename: Option<std::rc::Rc<str>>,
+        filename: Option<crate::String>,
     ) -> Vec<Result<Self::ReplReturn, Error>> {
         let ast = match Parser::gen_ast(text, filename) {
             Ok(ast) => ast,
@@ -215,14 +212,14 @@ impl BytecodeInterpreter {
             .globals
             .extend(intrinsics::INTRINSICS.map(|intrinsic| {
                 (
-                    Rc::from(intrinsics::get_name(intrinsic)),
+                    crate::String::from(intrinsics::get_name(intrinsic)),
                     Value::Function(FunctionObject::Intrinsic(intrinsic)),
                 )
             }));
         self.resolver.define_globals(
             &intrinsics::INTRINSICS
                 .map(intrinsics::get_name)
-                .map(Rc::from),
+                .map(crate::String::from),
         );
     }
 

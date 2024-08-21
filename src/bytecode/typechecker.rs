@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use crate::{
     ast::{Ast, BinaryOperator, Block, Expression, Identifier, Literal, Lvalue, UnaryOperator},
     visitor::AstVisitor,
@@ -66,7 +64,7 @@ impl AstVisitor for TypeChecker {
 
     fn visit_declaration(
         &mut self,
-        id: &Identifier,
+        _id: &Identifier,
         e: &Expression,
         _: bool,
     ) -> Result<Self::Good, Self::Bad> {
@@ -74,7 +72,7 @@ impl AstVisitor for TypeChecker {
         Ok(Type::None)
     }
 
-    fn visit_assignment(&mut self, id: &Lvalue, e: &Expression) -> Result<Self::Good, Self::Bad> {
+    fn visit_assignment(&mut self, _id: &Lvalue, e: &Expression) -> Result<Self::Good, Self::Bad> {
         self.visit_expr(e)?;
         Ok(Type::None)
     }

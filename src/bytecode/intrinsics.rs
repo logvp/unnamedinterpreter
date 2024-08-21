@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     bytecode::value::Value,
     error::{Error, RuntimeError},
@@ -49,7 +47,7 @@ impl IntrinsicFunction {
                 if argc != 1 {
                     Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
                 } else {
-                    vm.result.set(Value::String(Rc::from(format!(
+                    vm.result.set(Value::String(crate::String::from(format!(
                         "{}",
                         vm.stack.get(vm.stack_p.get() - argc).unwrap().type_of()
                     ))));
