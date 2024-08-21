@@ -6,6 +6,7 @@ mod lexer;
 mod parser;
 mod repl;
 mod treewalk;
+mod visitor;
 
 use std::{env, io};
 
