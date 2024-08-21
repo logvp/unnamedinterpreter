@@ -1,7 +1,7 @@
-pub(self) mod compiler;
-pub(self) mod instruction;
+ mod compiler;
+ mod instruction;
 pub mod interpreter;
-pub(self) mod intrinsics;
-pub(self) mod resolver;
+ mod intrinsics;
+ mod resolver;
 pub mod typechecker;
-pub(self) mod value;
+ mod value;

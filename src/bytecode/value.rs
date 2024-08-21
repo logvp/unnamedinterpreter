@@ -20,12 +20,14 @@ pub enum FunctionObject {
 }
 
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub enum Value {
     // Object(), TODO
     Function(FunctionObject),
     Integer(i32),
     String(crate::String),
     Boolean(bool),
+    #[default]
     None,
 }
 impl Value {
@@ -143,11 +145,6 @@ impl PartialEq for Value {
             (Self::None, Self::None) => true,
             _ => false,
         }
-    }
-}
-impl Default for Value {
-    fn default() -> Self {
-        Value::None
     }
 }
 impl From<Literal> for Value {

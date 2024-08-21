@@ -190,25 +190,25 @@ impl Lexer {
                 }
                 '-' if next_if_eq(&mut chars, '-', &mut loc) => {
                     // chomp until the end of the line
-                    while let Some(_) = chars.next_if(|&x| x != '\n') {}
+                    while chars.next_if(|&x| x != '\n').is_some() {}
                     continue;
                 }
                 '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                     fn chomp_comment(
-                        mut chars: &mut Peekable<impl Iterator<Item = char>>,
+                        chars: &mut Peekable<impl Iterator<Item = char>>,
                         start_loc: Loc,
                     ) -> Result<Loc, LexicalError> {
                         let mut loc = start_loc.clone();
                         while let Some(c) = chars.next() {
                             match c {
-                                '{' if next_if_eq(&mut chars, '-', &mut loc) => {
+                                '{' if next_if_eq(chars, '-', &mut loc) => {
                                     loc = chomp_comment(chars, loc)?;
                                 }
-                                '-' if next_if_eq(&mut chars, '}', &mut loc) => return Ok(loc),
+                                '-' if next_if_eq(chars, '}', &mut loc) => return Ok(loc),
                                 _ => loc.inc(c),
                             }
                         }
-                        return Err(LexicalError::UnmatchedMultilineComment(start_loc));
+                        Err(LexicalError::UnmatchedMultilineComment(start_loc))
                     }
                     loc = chomp_comment(&mut chars, loc)?;
                     continue;

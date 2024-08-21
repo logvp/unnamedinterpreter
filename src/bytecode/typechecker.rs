@@ -4,7 +4,9 @@ use crate::{
 };
 
 #[derive(Debug)]
+#[derive(Default)]
 pub enum Type {
+    #[default]
     None,
     Boolean,
     Integer,
@@ -21,11 +23,6 @@ impl PartialEq for Type {
             }
             (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
         }
-    }
-}
-impl Default for Type {
-    fn default() -> Self {
-        Type::None
     }
 }
 

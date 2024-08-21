@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOperator, Construct, UnaryOperator};
+use crate::ast::{BinaryOperator, Construct};
 use crate::bytecode::typechecker::TypeError;
 use crate::interpreter::RuntimeType;
 use crate::lexer;
