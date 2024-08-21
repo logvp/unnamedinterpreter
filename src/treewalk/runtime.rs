@@ -18,7 +18,7 @@ pub enum RuntimeValue {
     Object(Object),
     Function(Rc<FunctionType>),
     Integer(i32),
-    String(String),
+    String(Rc<str>),
     Boolean(bool),
     None,
 }
@@ -126,7 +126,7 @@ pub(super) struct Variable {
 
 #[derive(Clone)]
 pub(super) struct Context {
-    data: RefCell<HashMap<String, Variable>>,
+    data: RefCell<HashMap<Rc<str>, Variable>>,
     parent: Option<Rc<Self>>,
 }
 impl Context {
@@ -136,17 +136,17 @@ impl Context {
             parent: None,
         };
         global.declare(
-            "print".to_string(),
+            "print".into(),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Print))),
             true,
         );
         global.declare(
-            "typeof".to_string(),
+            "typeof".into(),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::TypeOf))),
             true,
         );
         global.declare(
-            "debug".to_string(),
+            "debug".into(),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Debug))),
             true,
         );
@@ -178,7 +178,7 @@ impl Context {
         self.data.borrow().contains_key(key)
     }
 
-    pub(super) fn declare(&self, key: String, val: RuntimeValue, is_const: bool) {
+    pub(super) fn declare(&self, key: Rc<str>, val: RuntimeValue, is_const: bool) {
         let None = self
             .data
             .borrow_mut()
@@ -188,10 +188,10 @@ impl Context {
         };
     }
 
-    pub(super) fn update(&self, key: String, val: RuntimeValue) -> Result<(), RuntimeError> {
+    pub(super) fn update(&self, key: Rc<str>, val: RuntimeValue) -> Result<(), RuntimeError> {
         if self.contains_in_scope(&key) {
             if self.is_const(&key).unwrap() {
-                Err(RuntimeError::ConstReassignment(key))
+                Err(RuntimeError::ConstReassignment(key.to_string()))
             } else {
                 let var = Variable {
                     val,
@@ -203,7 +203,7 @@ impl Context {
         } else if let Some(parent) = &self.parent {
             parent.update(key, val)
         } else {
-            Err(RuntimeError::UnknownIdentifier(key))
+            Err(RuntimeError::UnknownIdentifier(key.to_string()))
         }
     }
 

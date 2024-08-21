@@ -23,7 +23,9 @@ impl IntrinsicFunction {
                 if args.len() != 1 {
                     Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
                 } else {
-                    Ok(RuntimeValue::String(format!("{}", args[0].get_type())))
+                    Ok(RuntimeValue::String(
+                        format!("{}", args[0].get_type()).into(),
+                    ))
                 }
             }
             IntrinsicFunction::Debug => {

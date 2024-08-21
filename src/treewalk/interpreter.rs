@@ -47,14 +47,14 @@ impl AstVisitor for TreeWalkInterpreter {
     fn visit_variable(&mut self, var: &Identifier) -> Result<Self::Good, Self::Bad> {
         match self.context.get(&var.name) {
             Some(Variable { val, .. }) => Ok(val),
-            None => Err(RuntimeError::UnknownIdentifier(var.name.to_string()).into()), // Allocation
+            None => Err(RuntimeError::UnknownIdentifier(var.name.to_string()).into()),
         }
     }
 
     fn visit_literal(&mut self, lit: &Literal) -> Result<Self::Good, Self::Bad> {
         match lit {
             Literal::Integer(int) => Ok(RuntimeValue::Integer(*int)),
-            Literal::String(string) => Ok(RuntimeValue::String(string.to_string())), // Allocation
+            Literal::String(string) => Ok(RuntimeValue::String(Rc::clone(string))),
             Literal::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
     }
@@ -108,11 +108,14 @@ impl AstVisitor for TreeWalkInterpreter {
             BinaryOperator::Divide => {
                 RuntimeValue::Integer(self.visit_expr(lhs)?.int()? / self.visit_expr(rhs)?.int()?)
             }
-            BinaryOperator::Concatenate => RuntimeValue::String(format!(
-                "{}{}",
-                self.visit_expr(lhs)?.string()?,
-                self.visit_expr(rhs)?.string()?
-            )),
+            BinaryOperator::Concatenate => RuntimeValue::String(
+                format!(
+                    "{}{}",
+                    self.visit_expr(lhs)?.string()?,
+                    self.visit_expr(rhs)?.string()?
+                )
+                .into(),
+            ),
         })
     }
 
@@ -143,7 +146,7 @@ impl AstVisitor for TreeWalkInterpreter {
     ) -> Result<Self::Good, Self::Bad> {
         if !self.context.contains_in_scope(&lhs.name) {
             let value = self.visit_expr(rhs)?;
-            self.context.declare(lhs.name.to_string(), value, is_const);
+            self.context.declare(Rc::clone(&lhs.name), value, is_const);
         } else {
             Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
         }
@@ -158,7 +161,7 @@ impl AstVisitor for TreeWalkInterpreter {
         if self.context.contains(lhs.name().unwrap().as_ref()) {
             let value = self.visit_expr(rhs)?;
             self.context
-                .update(lhs.name().unwrap().to_string(), value)?;
+                .update(Rc::clone(&lhs.name().unwrap()), value)?;
         } else {
             Err(RuntimeError::UnknownIdentifier(
                 lhs.name().unwrap().to_string(),
@@ -215,7 +218,7 @@ impl AstVisitor for TreeWalkInterpreter {
                         }
                         // Bind arguments to parameter names
                         for (ident, val) in parameters.iter().zip(args.into_iter()) {
-                            scope.declare(ident.name.to_string(), val, false);
+                            scope.declare(Rc::clone(&ident.name), val, false);
                         }
 
                         let mut ctx = Self {
