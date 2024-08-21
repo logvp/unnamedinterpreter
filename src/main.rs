@@ -9,26 +9,50 @@ mod string;
 mod treewalk;
 mod visitor;
 
-use std::{env, io};
+use clap::{Parser, ValueEnum};
+
+use std::io;
 
 use bytecode::interpreter::BytecodeInterpreter;
-#[cfg(test)]
 use interpreter::Interpreter;
 use treewalk::TreeWalkInterpreter;
 
-type InterpreterImpl = TreeWalkInterpreter;
-
 pub use string::String;
 
-fn main() -> io::Result<()> {
-    let filename = env::args().nth(1);
+#[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum Backend {
+    #[default]
+    Treewalk,
+    Bytecode,
+}
 
+#[derive(Parser)]
+#[command(version, about)]
+struct Options {
+    filename: Option<std::string::String>,
+    #[arg(value_enum, short, long)]
+    backend: Option<Backend>,
+}
+
+fn run_main<I: Interpreter>(filename: Option<std::string::String>) -> io::Result<()> {
     if let Some(path) = filename {
-        repl::run_and_print_file::<InterpreterImpl, _>(&path)
+        repl::run_and_print_file::<I, _>(&path)
     } else {
-        repl::init::<InterpreterImpl>()
+        repl::init::<I>()
     }
 }
+
+fn main() -> io::Result<()> {
+    let opts = Options::parse();
+
+    match opts.backend.unwrap_or_default() {
+        Backend::Bytecode => run_main::<BytecodeInterpreter>(opts.filename),
+        Backend::Treewalk => run_main::<TreeWalkInterpreter>(opts.filename),
+    }
+}
+
+#[cfg(test)]
+type InterpreterImpl = BytecodeInterpreter;
 
 #[cfg(test)]
 const PROGRAM: &str = r#"
