@@ -1,6 +1,7 @@
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
     error::Error,
+    Symbol,
 };
 
 use super::{
@@ -51,7 +52,7 @@ impl<'a> BytecodeCompiler<'a> {
         })
     }
 
-    fn resolve(&self, name: crate::String) -> Source {
+    fn resolve(&self, name: Symbol) -> Source {
         let mut parent_depth = 0;
         let mut scope = self.current_scope;
         while scope > 0 {

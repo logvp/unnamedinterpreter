@@ -1,7 +1,10 @@
-use crate::ast::{BinaryOperator, Construct};
-use crate::bytecode::typechecker::TypeError;
-use crate::interpreter::RuntimeType;
-use crate::lexer;
+use crate::{
+    ast::{BinaryOperator, Construct},
+    bytecode::typechecker::TypeError,
+    interpreter::RuntimeType,
+    lexer::TokenKind,
+    Symbol,
+};
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
@@ -90,8 +93,8 @@ pub enum LexicalError {
 
 #[derive(Debug)]
 pub enum SyntaxError {
-    ExpectedTokenIn(lexer::TokenKind, lexer::TokenKind, Construct, Loc),
-    UnexpectedTokenIn(lexer::TokenKind, Construct, Loc),
+    ExpectedTokenIn(TokenKind, TokenKind, Construct, Loc),
+    UnexpectedTokenIn(TokenKind, Construct, Loc),
     ExpressionMayOnlyComeAtEndIn(Construct, Loc),
     AssignmentRequiresLvalue(Loc),
     ParenthesisRequired(BinaryOperator, Construct, Loc),
@@ -101,9 +104,9 @@ pub enum SyntaxError {
 pub enum RuntimeError {
     ExpectedButFound(RuntimeType, RuntimeType),
     ExpectedArgumentsFound(usize, usize),
-    VariableRedeclaration(crate::String),
-    ConstReassignment(crate::String),
-    UnknownIdentifier(crate::String),
+    VariableRedeclaration(Symbol),
+    ConstReassignment(Symbol),
+    UnknownIdentifier(Symbol),
 }
 
 impl Display for LexicalError {

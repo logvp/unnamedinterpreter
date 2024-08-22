@@ -12,7 +12,7 @@ pub struct Token {
 #[derive(Debug)]
 pub enum TokenKind {
     Literal(Literal),
-    Identifier(crate::String),
+    Identifier(crate::Symbol),
     LeftParen,
     RightParen,
     LeftAngle,
@@ -288,7 +288,7 @@ impl Lexer {
                         "while" => TokenKind::While,
                         "if" => TokenKind::If,
                         "else" => TokenKind::Else,
-                        _ => TokenKind::Identifier(crate::String::from(buffer.as_ref())),
+                        _ => TokenKind::Identifier(crate::Symbol::from(buffer.as_ref())),
                     };
                     tok
                 }

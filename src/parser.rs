@@ -322,7 +322,7 @@ impl Parser {
             Ok(Identifier { name })
         } else {
             Err(SyntaxError::ExpectedTokenIn(
-                TokenKind::Identifier(crate::String::empty()),
+                TokenKind::Identifier(crate::Symbol::dont_care()),
                 ident,
                 ort,
                 self.loc.clone(),

@@ -1,4 +1,5 @@
 use crate::ast::{BinaryOperator, UnaryOperator};
+use crate::Symbol;
 
 use super::value::Value;
 
@@ -8,8 +9,8 @@ pub enum Source {
     Result,
     Stack,
     Local(usize),
-    Global(crate::String),
-    Env(crate::String),
+    Global(Symbol),
+    Env(Symbol),
 }
 
 #[derive(Debug)]

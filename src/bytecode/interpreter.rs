@@ -8,6 +8,7 @@ use crate::{
     error::{Error, RuntimeError},
     interpreter::Interpreter,
     parser::Parser,
+    Symbol,
 };
 
 use super::{
@@ -20,7 +21,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    data: Rc<RefCell<HashMap<crate::String, Value>>>,
+    data: Rc<RefCell<HashMap<Symbol, Value>>>,
     parent: Option<Rc<Environment>>,
 }
 impl Environment {
@@ -31,7 +32,7 @@ impl Environment {
         }
     }
 
-    fn get(&self, key: &crate::String) -> Result<Value, Error> {
+    fn get(&self, key: &Symbol) -> Result<Value, Error> {
         match self.data.borrow().get(key) {
             Some(a) => Ok(a.clone()),
             None => {
@@ -44,7 +45,7 @@ impl Environment {
         }
     }
 
-    fn set(&self, key: &crate::String, value: Value) {
+    fn set(&self, key: &Symbol, value: Value) {
         self.data.as_ref().borrow_mut().insert(key.clone(), value);
     }
 }
@@ -64,7 +65,7 @@ pub(super) struct VirtualMachine {
     pub stack_p: Cell<usize>,
     pub stack: Vec<Value>,
     pub local: Vec<Value>,
-    pub globals: HashMap<crate::String, Value>,
+    pub globals: HashMap<Symbol, Value>,
     pub environment: Option<Rc<Environment>>,
 }
 impl VirtualMachine {
@@ -212,14 +213,14 @@ impl BytecodeInterpreter {
             .globals
             .extend(intrinsics::INTRINSICS.map(|intrinsic| {
                 (
-                    crate::String::from(intrinsics::get_name(intrinsic)),
+                    Symbol::from(intrinsics::get_name(intrinsic)),
                     Value::Function(FunctionObject::Intrinsic(intrinsic)),
                 )
             }));
         self.resolver.define_globals(
             &intrinsics::INTRINSICS
                 .map(intrinsics::get_name)
-                .map(crate::String::from),
+                .map(Symbol::from),
         );
     }
 

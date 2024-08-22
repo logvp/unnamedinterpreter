@@ -109,7 +109,7 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> Option<crate::String> {
+    pub fn name(&self) -> Option<crate::Symbol> {
         match self {
             Self::Identifier(ident) => Some(ident.name.clone()),
             // _ => None,
@@ -119,7 +119,7 @@ impl Lvalue {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Identifier {
-    pub name: crate::String,
+    pub name: crate::Symbol,
 }
 
 #[derive(Debug, Clone)]

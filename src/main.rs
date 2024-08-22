@@ -17,7 +17,7 @@ use bytecode::interpreter::BytecodeInterpreter;
 use interpreter::Interpreter;
 use treewalk::TreeWalkInterpreter;
 
-pub use string::String;
+pub use string::{String, Symbol};
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Backend {

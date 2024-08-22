@@ -9,6 +9,7 @@ use crate::{
     ast::{Block, Identifier},
     error::RuntimeError,
     interpreter::RuntimeType,
+    Symbol,
 };
 
 use super::instrinsics::IntrinsicFunction;
@@ -126,7 +127,7 @@ pub(super) struct Variable {
 
 #[derive(Clone)]
 pub(super) struct Context {
-    data: RefCell<HashMap<crate::String, Variable>>,
+    data: RefCell<HashMap<Symbol, Variable>>,
     parent: Option<Rc<Self>>,
 }
 impl Context {
@@ -154,7 +155,7 @@ impl Context {
         global
     }
 
-    pub(super) fn is_const(&self, key: &crate::String) -> Option<bool> {
+    pub(super) fn is_const(&self, key: &Symbol) -> Option<bool> {
         if self.data.borrow().contains_key(key) {
             Some(self.data.borrow().get(key).unwrap().is_const)
         } else if let Some(parent) = &self.parent {
@@ -164,7 +165,7 @@ impl Context {
         }
     }
 
-    pub(super) fn contains(&self, key: &crate::String) -> bool {
+    pub(super) fn contains(&self, key: &Symbol) -> bool {
         if self.data.borrow().contains_key(key) {
             true
         } else if let Some(parent) = &self.parent {
@@ -174,11 +175,11 @@ impl Context {
         }
     }
 
-    pub(super) fn contains_in_scope(&self, key: &crate::String) -> bool {
+    pub(super) fn contains_in_scope(&self, key: &Symbol) -> bool {
         self.data.borrow().contains_key(key)
     }
 
-    pub(super) fn declare(&self, key: crate::String, val: RuntimeValue, is_const: bool) {
+    pub(super) fn declare(&self, key: Symbol, val: RuntimeValue, is_const: bool) {
         let None = self
             .data
             .borrow_mut()
@@ -188,7 +189,7 @@ impl Context {
         };
     }
 
-    pub(super) fn update(&self, key: crate::String, val: RuntimeValue) -> Result<(), RuntimeError> {
+    pub(super) fn update(&self, key: Symbol, val: RuntimeValue) -> Result<(), RuntimeError> {
         if self.contains_in_scope(&key) {
             if self.is_const(&key).unwrap() {
                 Err(RuntimeError::ConstReassignment(key))
@@ -207,7 +208,7 @@ impl Context {
         }
     }
 
-    pub(super) fn get(&self, key: &crate::String) -> Option<Variable> {
+    pub(super) fn get(&self, key: &Symbol) -> Option<Variable> {
         self.data
             .borrow()
             .get(key)

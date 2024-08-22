@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
     error::{Error, RuntimeError},
+    Symbol,
 };
 
 #[derive(Clone, Copy)]
@@ -26,13 +27,13 @@ pub(super) enum GlobalVariable {
 pub struct Scope {
     num_locals: usize,
     parent: usize,
-    data: HashMap<crate::String, LocalVariable>,
+    data: HashMap<Symbol, LocalVariable>,
 }
 
 #[derive(Default)]
 pub(super) struct ResolutionTable {
     local_scopes: Vec<Scope>,
-    global_scope: HashMap<crate::String, GlobalVariable>,
+    global_scope: HashMap<Symbol, GlobalVariable>,
 }
 impl ResolutionTable {
     pub fn parent_of(&self, scope: usize) -> usize {
@@ -50,7 +51,7 @@ impl ResolutionTable {
     fn make_declaration(
         &mut self,
         scope: usize,
-        ident: crate::String,
+        ident: Symbol,
         is_const: bool,
     ) -> Result<(), Error> {
         let redeclaration = if scope > 0 {
@@ -87,7 +88,7 @@ impl ResolutionTable {
 
     fn make_assignment(
         &mut self,
-        ident: crate::String,
+        ident: Symbol,
         scope: usize,
         closure_boundary: usize,
     ) -> Result<(), Error> {
@@ -125,11 +126,7 @@ impl ResolutionTable {
         Ok(())
     }
 
-    fn found_unknown_variable(
-        &mut self,
-        ident: crate::String,
-        in_a_closure: bool,
-    ) -> Result<(), Error> {
+    fn found_unknown_variable(&mut self, ident: Symbol, in_a_closure: bool) -> Result<(), Error> {
         if in_a_closure {
             // it could be a global that has not been defined yet, but will be before this closure is called
             match self
@@ -160,7 +157,7 @@ impl ResolutionTable {
         self.local_scopes[scope - 1].num_locals
     }
 
-    pub fn lookup_global(&self, ident: &crate::String) -> Result<GlobalVariable, Error> {
+    pub fn lookup_global(&self, ident: &Symbol) -> Result<GlobalVariable, Error> {
         match self.global_scope.get(ident) {
             Some(a @ (GlobalVariable::NotConstant | GlobalVariable::Constant)) => Ok(*a),
             Some(GlobalVariable::Unknown) | None => {
@@ -171,7 +168,7 @@ impl ResolutionTable {
 
     pub fn get_local_and_capture(
         &mut self,
-        ident: &crate::String,
+        ident: &Symbol,
         mut scope: usize,
         closure_boundary: usize,
     ) -> Option<LocalVariable> {
@@ -190,11 +187,7 @@ impl ResolutionTable {
         None
     }
 
-    pub fn lookup_local_in_scope(
-        &self,
-        ident: &crate::String,
-        scope: usize,
-    ) -> Option<LocalVariable> {
+    pub fn lookup_local_in_scope(&self, ident: &Symbol, scope: usize) -> Option<LocalVariable> {
         if scope == 0 {
             return None;
         }
@@ -238,7 +231,7 @@ impl Resolver {
         self.current_scope > 0
     }
 
-    pub fn define_globals(&mut self, identifiers: &[crate::String]) {
+    pub fn define_globals(&mut self, identifiers: &[Symbol]) {
         for ident in identifiers.iter() {
             self.scopes
                 .make_declaration(0, ident.clone(), false)
