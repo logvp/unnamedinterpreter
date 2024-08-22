@@ -53,6 +53,7 @@ impl Environment {
 
 type CallStack = Vec<(usize, usize)>;
 pub struct BytecodeInterpreter {
+    options: Options,
     procedures: Vec<Vec<Instruction>>,
     call_stack: CallStack,
     vm: VirtualMachine,
@@ -173,8 +174,9 @@ impl VirtualMachine {
 impl Interpreter for BytecodeInterpreter {
     type ReplReturn = Value;
 
-    fn new() -> Self {
+    fn new(options: Options) -> Self {
         let mut interpreter = BytecodeInterpreter {
+            options,
             vm: Default::default(),
             resolver: Resolver::new(),
             call_stack: Default::default(),
@@ -188,7 +190,6 @@ impl Interpreter for BytecodeInterpreter {
         &mut self,
         text: &str,
         filename: Option<crate::String>,
-        options: &Options,
     ) -> Vec<Result<Self::ReplReturn, Error>> {
         let ast = match Parser::gen_ast(text, filename) {
             Ok(ast) => ast,
@@ -201,7 +202,7 @@ impl Interpreter for BytecodeInterpreter {
             ast,
             self.procedures.len(),
             self.resolver.get_table(),
-            options,
+            &self.options,
         ) {
             Ok(program) => program,
             Err(e) => return vec![Err(e)],

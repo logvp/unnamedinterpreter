@@ -5,13 +5,12 @@ use crate::{argp::Options, error::Error};
 pub trait Interpreter {
     type ReplReturn: Display;
 
-    fn new() -> Self;
+    fn new(options: Options) -> Self;
 
     fn interpret(
         &mut self,
         text: &str,
         filename: Option<crate::String>,
-        options: &Options,
     ) -> Vec<Result<Self::ReplReturn, Error>>;
 }
 

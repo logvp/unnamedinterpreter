@@ -17,7 +17,7 @@ pub struct TreeWalkInterpreter {
 impl Interpreter for TreeWalkInterpreter {
     type ReplReturn = RuntimeValue;
 
-    fn new() -> Self {
+    fn new(_options: Options) -> Self {
         TreeWalkInterpreter {
             context: Rc::new(Context::init_global()),
         }
@@ -27,7 +27,6 @@ impl Interpreter for TreeWalkInterpreter {
         &mut self,
         text: &str,
         filename: Option<crate::String>,
-        _options: &Options,
     ) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret = Vec::new();
         match Parser::gen_ast(text, filename) {

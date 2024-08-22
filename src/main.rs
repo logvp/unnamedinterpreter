@@ -44,7 +44,7 @@ mod argp {
 
 fn run_main<I: Interpreter>(options: argp::Options) -> io::Result<()> {
     if options.filename.is_some() {
-        repl::run_and_print_file::<I>(&options)
+        repl::run_and_print_file::<I>(options)
     } else {
         repl::init::<I>(options)
     }
@@ -93,14 +93,14 @@ fn parser() {
 
 #[test]
 fn interpreter_treewalk() {
-    for result in TreeWalkInterpreter::new().interpret(PROGRAM, None, &argp::Options::default()) {
+    for result in TreeWalkInterpreter::new(argp::Options::default()).interpret(PROGRAM, None) {
         result.unwrap();
     }
 }
 
 #[test]
 fn interpreter_bytecode() {
-    for result in BytecodeInterpreter::new().interpret(PROGRAM, None, &argp::Options::default()) {
+    for result in BytecodeInterpreter::new(argp::Options::default()).interpret(PROGRAM, None) {
         result.unwrap();
     }
 }
@@ -111,7 +111,7 @@ fn examples_treewalk() {
 
     for file in fs::read_dir("./examples").unwrap() {
         let path = &file.unwrap().path();
-        repl::run_file::<TreeWalkInterpreter, _>(&path, &argp::Options::default())
+        repl::run_file::<TreeWalkInterpreter, _>(&path, argp::Options::default())
             .unwrap()
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -125,7 +125,7 @@ fn examples_bytecode() {
 
     for file in fs::read_dir("./examples").unwrap() {
         let path = &file.unwrap().path();
-        repl::run_file::<BytecodeInterpreter, _>(&path, &argp::Options::default())
+        repl::run_file::<BytecodeInterpreter, _>(&path, argp::Options::default())
             .unwrap()
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -135,11 +135,11 @@ fn examples_bytecode() {
 
 #[cfg(test)]
 fn dir_should_error<I: Interpreter>(path: &str) {
-    use std::{default, fs};
+    use std::fs;
 
     'file_loop: for file in fs::read_dir(path).unwrap() {
         for result in
-            repl::run_file::<I, _>(&file.as_ref().unwrap().path(), &argp::Options::default())
+            repl::run_file::<I, _>(&file.as_ref().unwrap().path(), argp::Options::default())
                 .unwrap()
         {
             if result.is_err() {
