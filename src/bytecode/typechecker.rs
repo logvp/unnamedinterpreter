@@ -3,8 +3,7 @@ use crate::{
     visitor::AstVisitor,
 };
 
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub enum Type {
     #[default]
     None,

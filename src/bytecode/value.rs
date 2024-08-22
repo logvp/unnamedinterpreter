@@ -19,8 +19,7 @@ pub enum FunctionObject {
     Intrinsic(IntrinsicFunction),
 }
 
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub enum Value {
     // Object(), TODO
     Function(FunctionObject),
