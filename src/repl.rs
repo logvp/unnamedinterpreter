@@ -173,16 +173,18 @@ pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
 }
 
 pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
-    if let Ok(result) = run_file::<T, P>(path) {
-        Repl::<T, io::StdinLock, _>::print_results(&mut io::stdout(), &result)
-    } else {
-        eprintln!(
-            "Could not open file '{}'",
-            path.as_ref()
-                .file_name()
-                .expect("Couldn't open file and can't display file name")
-                .to_string_lossy()
-        );
-        Ok(())
+    let result = run_file::<T, P>(path);
+    match result {
+        Ok(result) => Repl::<T, io::StdinLock, _>::print_results(&mut io::stdout(), &result),
+        Err(e) => {
+            eprintln!(
+                "Could not open file '{}'",
+                path.as_ref()
+                    .file_name()
+                    .expect("Couldn't open file and can't display file name")
+                    .to_string_lossy()
+            );
+            Err(e)
+        }
     }
 }
