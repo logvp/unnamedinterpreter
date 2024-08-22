@@ -16,7 +16,6 @@ pub trait Interpreter {
 
 #[derive(Debug)]
 pub enum RuntimeType {
-    Object,
     Function,
     Integer,
     String,
@@ -29,7 +28,6 @@ impl Display for RuntimeType {
             f,
             "{}",
             match self {
-                Self::Object => "Object",
                 Self::Function => "Function",
                 Self::Integer => "Integer",
                 Self::String => "String",

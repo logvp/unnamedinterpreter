@@ -16,7 +16,6 @@ use super::instrinsics::IntrinsicFunction;
 
 #[derive(Clone, Debug)]
 pub enum RuntimeValue {
-    Object(Object),
     Function(Rc<FunctionType>),
     Integer(i32),
     String(crate::String),
@@ -32,7 +31,6 @@ impl Default for RuntimeValue {
 impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Object(ctx) => write!(f, "{:?}", ctx),
             Self::Function { .. } => write!(f, "FunctionObject"),
             Self::Integer(int) => write!(f, "{}", int),
             Self::String(string) => write!(f, "{}", string),
@@ -47,7 +45,6 @@ impl PartialEq for RuntimeValue {
             (Self::Integer(a), Self::Integer(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Boolean(a), Self::Boolean(b)) => a == b,
-            (Self::Object(a), Self::Object(b)) => a == b,
             (Self::Function(a), Self::Function(b)) => {
                 // Two functions are equal iff they are aliases of each other
                 Rc::ptr_eq(a, b)
@@ -93,7 +90,6 @@ impl RuntimeValue {
 
     pub(super) fn get_type(&self) -> RuntimeType {
         match self {
-            Self::Object(_) => RuntimeType::Object,
             Self::Function(_) => RuntimeType::Function,
             Self::Integer(_) => RuntimeType::Integer,
             Self::String(_) => RuntimeType::String,
@@ -108,9 +104,6 @@ pub enum FunctionType {
     Lambda(Lambda),
     Intrinsic(IntrinsicFunction),
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Object(pub(super) Rc<Context>);
 
 #[derive(Debug)]
 pub struct Lambda {
