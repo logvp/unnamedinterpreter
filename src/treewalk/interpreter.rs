@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::rc::Rc;
 
+use crate::argp::Options;
 use crate::ast::*;
 use crate::error::{Error, RuntimeError};
 use crate::interpreter::{Interpreter, RuntimeType};
@@ -26,6 +27,7 @@ impl Interpreter for TreeWalkInterpreter {
         &mut self,
         text: &str,
         filename: Option<crate::String>,
+        _options: &Options,
     ) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret = Vec::new();
         match Parser::gen_ast(text, filename) {

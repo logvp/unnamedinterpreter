@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::error::Error;
+use crate::{argp::Options, error::Error};
 
 pub trait Interpreter {
     type ReplReturn: Display;
@@ -11,6 +11,7 @@ pub trait Interpreter {
         &mut self,
         text: &str,
         filename: Option<crate::String>,
+        options: &Options,
     ) -> Vec<Result<Self::ReplReturn, Error>>;
 }
 

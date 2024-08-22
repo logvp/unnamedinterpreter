@@ -32,15 +32,17 @@ pub enum TypeError {
     BinopExpectsButFound(BinaryOperator, Type, Type, Type),
 }
 
-pub struct TypeChecker {}
+pub struct TypeChecker {
+    unify_branches: bool,
+}
 
 impl TypeChecker {
-    fn new() -> Self {
-        TypeChecker {}
+    fn new(unify_branches: bool) -> Self {
+        TypeChecker { unify_branches }
     }
 
-    pub fn check(ast: &Ast) -> Result<(), TypeError> {
-        let mut checker = TypeChecker::new();
+    pub fn check(ast: &Ast, unify_branches: bool) -> Result<(), TypeError> {
+        let mut checker = TypeChecker::new(unify_branches);
         checker.visit_ast(ast)?;
         Ok(())
     }
@@ -170,7 +172,11 @@ impl AstVisitor for TypeChecker {
         if type_a == type_b {
             Ok(type_a)
         } else {
-            Err(TypeError::ExpectedButFound(type_a, type_b))
+            if self.unify_branches {
+                Err(TypeError::ExpectedButFound(type_a, type_b))
+            } else {
+                Ok(Type::ExperimentalAny)
+            }
         }
     }
 

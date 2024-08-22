@@ -9,8 +9,6 @@ mod string;
 mod treewalk;
 mod visitor;
 
-use clap::{Parser, ValueEnum};
-
 use std::io;
 
 use bytecode::interpreter::BytecodeInterpreter;
@@ -19,35 +17,45 @@ use treewalk::TreeWalkInterpreter;
 
 pub use string::{String, Symbol};
 
-#[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum Backend {
-    #[default]
-    Treewalk,
-    Bytecode,
+use clap::Parser;
+
+// Overriding String causes errors with some of of the derive attributes
+// Using an inner module prevents this
+mod argp {
+    use clap::{Parser, ValueEnum};
+
+    #[derive(Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+    pub enum Backend {
+        #[default]
+        Treewalk,
+        Bytecode,
+    }
+
+    #[derive(Parser, Default)]
+    #[command(version, about)]
+    pub struct Options {
+        pub filename: Option<std::string::String>,
+        #[arg(value_enum, short, long)]
+        pub backend: Option<Backend>,
+        #[arg(long, default_value_t = false)]
+        pub unify_branches: bool,
+    }
 }
 
-#[derive(Parser)]
-#[command(version, about)]
-struct Options {
-    filename: Option<std::string::String>,
-    #[arg(value_enum, short, long)]
-    backend: Option<Backend>,
-}
-
-fn run_main<I: Interpreter>(filename: Option<std::string::String>) -> io::Result<()> {
-    if let Some(path) = filename {
-        repl::run_and_print_file::<I, _>(&path)
+fn run_main<I: Interpreter>(options: argp::Options) -> io::Result<()> {
+    if options.filename.is_some() {
+        repl::run_and_print_file::<I>(&options)
     } else {
-        repl::init::<I>()
+        repl::init::<I>(options)
     }
 }
 
 fn main() -> io::Result<()> {
-    let opts = Options::parse();
+    let opts = argp::Options::parse();
 
     match opts.backend.unwrap_or_default() {
-        Backend::Bytecode => run_main::<BytecodeInterpreter>(opts.filename),
-        Backend::Treewalk => run_main::<TreeWalkInterpreter>(opts.filename),
+        argp::Backend::Bytecode => run_main::<BytecodeInterpreter>(opts),
+        argp::Backend::Treewalk => run_main::<TreeWalkInterpreter>(opts),
     }
 }
 
@@ -85,14 +93,14 @@ fn parser() {
 
 #[test]
 fn interpreter_treewalk() {
-    for result in TreeWalkInterpreter::new().interpret(PROGRAM, None) {
+    for result in TreeWalkInterpreter::new().interpret(PROGRAM, None, &argp::Options::default()) {
         result.unwrap();
     }
 }
 
 #[test]
 fn interpreter_bytecode() {
-    for result in BytecodeInterpreter::new().interpret(PROGRAM, None) {
+    for result in BytecodeInterpreter::new().interpret(PROGRAM, None, &argp::Options::default()) {
         result.unwrap();
     }
 }
@@ -103,7 +111,7 @@ fn examples_treewalk() {
 
     for file in fs::read_dir("./examples").unwrap() {
         let path = &file.unwrap().path();
-        repl::run_file::<TreeWalkInterpreter, _>(&path)
+        repl::run_file::<TreeWalkInterpreter, _>(&path, &argp::Options::default())
             .unwrap()
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -117,7 +125,7 @@ fn examples_bytecode() {
 
     for file in fs::read_dir("./examples").unwrap() {
         let path = &file.unwrap().path();
-        repl::run_file::<BytecodeInterpreter, _>(&path)
+        repl::run_file::<BytecodeInterpreter, _>(&path, &argp::Options::default())
             .unwrap()
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
@@ -127,10 +135,13 @@ fn examples_bytecode() {
 
 #[cfg(test)]
 fn dir_should_error<I: Interpreter>(path: &str) {
-    use std::fs;
+    use std::{default, fs};
 
     'file_loop: for file in fs::read_dir(path).unwrap() {
-        for result in repl::run_file::<I, _>(&file.as_ref().unwrap().path()).unwrap() {
+        for result in
+            repl::run_file::<I, _>(&file.as_ref().unwrap().path(), &argp::Options::default())
+                .unwrap()
+        {
             if result.is_err() {
                 continue 'file_loop;
             }

@@ -9,7 +9,7 @@ let constructor = lambda (name, age) {
                     name
                 } else if (field == "age") {
                     age
-                } else {}
+                }
             }
         } else if (method == "set") {
             lambda (field) {
@@ -17,7 +17,7 @@ let constructor = lambda (name, age) {
                     lambda (new_name) { name = new_name; }
                 } else if (field == "age") {
                     lambda (new_age) { age = new_age; }
-                } else {}
+                }
             }
         } else if (method == "greet") {
             lambda () { print("Hello! My name is", name, "and I am", age, "years old!"); }

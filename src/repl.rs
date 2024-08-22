@@ -1,3 +1,4 @@
+use crate::argp::Options;
 use crate::error::Error;
 use crate::interpreter::Interpreter;
 use std::collections::HashMap;
@@ -14,9 +15,10 @@ pub struct Repl<T: Interpreter, I: BufRead, O: Write> {
     multiline_buffer: String,
     multiline: bool,
     recording: bool,
+    options: Options,
 }
 impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
-    pub fn new(input: I, output: O) -> Self {
+    pub fn new(input: I, output: O, options: Options) -> Self {
         Repl {
             interpreter: T::new(),
             input,
@@ -27,6 +29,7 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
             multiline_buffer: String::new(),
             multiline: false,
             recording: false,
+            options,
         }
     }
 
@@ -102,7 +105,7 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
     }
     fn play_macro(&mut self, name: String) -> io::Result<()> {
         let playback = self.macros.get(&name).unwrap();
-        let result = self.interpreter.interpret(playback, None);
+        let result = self.interpreter.interpret(playback, None, &self.options);
         Self::print_results(&mut self.output, &result)?;
         Ok(())
     }
@@ -116,7 +119,9 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
             writeln!(self.output, "REPL: `:{{` must come before `:}}`")?;
             return Ok(());
         }
-        let result = self.interpreter.interpret(&self.multiline_buffer, None);
+        let result = self
+            .interpreter
+            .interpret(&self.multiline_buffer, None, &self.options);
         Self::print_results(&mut self.output, &result)?;
         self.multiline = false;
         self.multiline_buffer.clear();
@@ -139,7 +144,7 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
             if self.recording {
                 self.macro_buffer.push_str(&buffer);
             }
-            let result = self.interpreter.interpret(&buffer, None);
+            let result = self.interpreter.interpret(&buffer, None, &self.options);
             Self::print_results(&mut self.output, &result)?;
         }
         Ok(true)
@@ -156,33 +161,35 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
     }
 }
 
-pub fn init<T: Interpreter>() -> io::Result<()> {
+pub fn init<T: Interpreter>(options: Options) -> io::Result<()> {
     let stdin = io::stdin().lock();
     let stdout = io::stdout();
 
-    let mut repl = Repl::<T, _, _>::new(stdin, stdout);
+    let mut repl = Repl::<T, _, _>::new(stdin, stdout, options);
     repl.start()?;
     Ok(())
 }
 
 pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
     path: &P,
+    options: &Options,
 ) -> io::Result<Vec<Result<T::ReplReturn, Error>>> {
     let content = std::fs::read_to_string(path)?;
-    Ok(T::new().interpret(&content, path.as_ref().to_str().map(crate::String::from)))
+    Ok(T::new().interpret(
+        &content,
+        path.as_ref().to_str().map(crate::String::from),
+        options,
+    ))
 }
 
-pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {
-    let result = run_file::<T, P>(path);
+pub fn run_and_print_file<T: Interpreter>(options: &Options) -> io::Result<()> {
+    let result = run_file::<T, _>(options.filename.as_ref().unwrap(), &options);
     match result {
         Ok(result) => Repl::<T, io::StdinLock, _>::print_results(&mut io::stdout(), &result),
         Err(e) => {
             eprintln!(
                 "Could not open file '{}'",
-                path.as_ref()
-                    .file_name()
-                    .expect("Couldn't open file and can't display file name")
-                    .to_string_lossy()
+                options.filename.as_ref().unwrap()
             );
             Err(e)
         }

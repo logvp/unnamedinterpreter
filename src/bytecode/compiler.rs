@@ -1,4 +1,5 @@
 use crate::{
+    argp::Options,
     ast::{Ast, AstNode, Block, Expression, Statement},
     error::Error,
     Symbol,
@@ -40,8 +41,9 @@ impl<'a> BytecodeCompiler<'a> {
         ast: Ast,
         start_index: usize,
         variables: &ResolutionTable,
+        options: &Options,
     ) -> Result<ProgramChunk, Error> {
-        TypeChecker::check(&ast)?;
+        TypeChecker::check(&ast, options.unify_branches)?;
         let mut compiler = BytecodeCompiler::new(start_index, variables);
         for node in ast.nodes.iter() {
             compiler.compile_node(node)?;

@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    argp::Options,
     error::{Error, RuntimeError},
     interpreter::Interpreter,
     parser::Parser,
@@ -187,6 +188,7 @@ impl Interpreter for BytecodeInterpreter {
         &mut self,
         text: &str,
         filename: Option<crate::String>,
+        options: &Options,
     ) -> Vec<Result<Self::ReplReturn, Error>> {
         let ast = match Parser::gen_ast(text, filename) {
             Ok(ast) => ast,
@@ -199,6 +201,7 @@ impl Interpreter for BytecodeInterpreter {
             ast,
             self.procedures.len(),
             self.resolver.get_table(),
+            options,
         ) {
             Ok(program) => program,
             Err(e) => return vec![Err(e)],
