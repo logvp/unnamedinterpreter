@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Ast, AstNode, BinaryOperator, Block, Literal, Statement, UnaryOperator},
+    ast::{Ast, AstNode, BinaryOperator, Block, Expression, Literal, Statement, UnaryOperator},
     visitor::AstVisitor,
 };
 
@@ -195,8 +195,17 @@ impl AstVisitor for Printer {
         buf += &self.visit_expr(cond)?;
         buf += ") ";
         buf += &self.visit_block(if_true)?;
-        buf += " else ";
-        buf += &self.visit_block(if_false)?;
+        match if_false.0.as_ref() {
+            [] => {}
+            [AstNode::Expression(Expression::IfElse(elif_cond, elif_true, elif_false))] => {
+                buf += " else ";
+                buf += &self.visit_if_else(elif_cond, elif_true, elif_false)?;
+            }
+            _ => {
+                buf += " else ";
+                buf += &self.visit_block(if_false)?;
+            }
+        }
         Ok(buf)
     }
 
