@@ -4,6 +4,7 @@ mod error;
 mod interpreter;
 mod lexer;
 mod parser;
+mod printer;
 mod repl;
 mod string;
 mod treewalk;
@@ -14,8 +15,9 @@ use std::io;
 use bytecode::interpreter::BytecodeInterpreter;
 use interpreter::Interpreter;
 use treewalk::TreeWalkInterpreter;
+use visitor::AstVisitor;
 
-pub use string::{String, Symbol};
+pub use crate::string::{String, Symbol};
 
 use clap::Parser;
 
@@ -39,6 +41,8 @@ mod argp {
         pub backend: Option<Backend>,
         #[arg(long, default_value_t = false)]
         pub unify_branches: bool,
+        #[arg(long, default_value_t = false)]
+        pub print_only: bool,
     }
 }
 
@@ -52,6 +56,19 @@ fn run_main<I: Interpreter>(options: argp::Options) -> io::Result<()> {
 
 fn main() -> io::Result<()> {
     let opts = argp::Options::parse();
+
+    if opts.print_only {
+        let mut p = printer::Printer;
+        let ast = crate::parser::Parser::gen_ast(
+            std::fs::read_to_string(opts.filename.unwrap())
+                .unwrap()
+                .as_ref(),
+            None,
+        )
+        .unwrap();
+        println!("{}", p.visit_ast(&ast).unwrap());
+        return Ok(());
+    }
 
     match opts.backend.unwrap_or_default() {
         argp::Backend::Bytecode => run_main::<BytecodeInterpreter>(opts),
@@ -163,4 +180,17 @@ fn should_error_runtime_treewalk() {
 #[test]
 fn should_error_runtime_bytecode() {
     dir_should_error::<BytecodeInterpreter>("./err/runtime")
+}
+
+#[test]
+fn printer_examples() {
+    use std::fs;
+
+    for file in fs::read_dir("./examples").unwrap() {
+        let text = fs::read_to_string(file.as_ref().unwrap().path()).unwrap();
+        let ast = parser::Parser::gen_ast(&text, None).unwrap();
+        let gen_text = printer::Printer::print(&ast);
+        let check_ast = parser::Parser::gen_ast(&gen_text, None).unwrap();
+        assert_eq!(ast, check_ast);
+    }
 }

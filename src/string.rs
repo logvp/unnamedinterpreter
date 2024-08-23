@@ -35,6 +35,11 @@ where
         Self(value.into())
     }
 }
+impl AsRef<str> for Symbol {
+    fn as_ref(&self) -> &str {
+        self.0 .0.as_ref()
+    }
+}
 
 impl Symbol {
     pub fn dont_care() -> Self {

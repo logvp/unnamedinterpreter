@@ -27,7 +27,7 @@ pub enum Construct {
     SimpleDeclaration,
 }
 
-#[derive(Debug, Default)]
+#[derive(PartialEq, Debug, Default)]
 pub struct Ast {
     pub nodes: Vec<AstNode>,
 }
@@ -44,13 +44,13 @@ impl DerefMut for Ast {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum AstNode {
     Expression(Expression),
     Statement(Statement),
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Block(pub Rc<[AstNode]>);
 thread_local! {
     static EMPTY_BLOCK_DATA: Rc<[AstNode]> = Rc::new([]);
@@ -61,14 +61,14 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Statement {
     Declaration(Identifier, Expression, bool),
     Assignment(Lvalue, Expression),
     Expression(Expression),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum BinaryOperator {
     // Comparisons
     GreaterThan,
@@ -86,12 +86,12 @@ pub enum BinaryOperator {
     Concatenate,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum UnaryOperator {
     Negate,
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expression {
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     Unary(UnaryOperator, Box<Expression>),
@@ -104,7 +104,7 @@ pub enum Expression {
     Variable(Identifier),
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Lvalue {
     Identifier(Identifier),
 }
@@ -122,7 +122,7 @@ pub struct Identifier {
     pub name: crate::Symbol,
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Literal {
     Integer(i32),
     String(crate::String),
