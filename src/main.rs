@@ -15,7 +15,6 @@ use std::io;
 use bytecode::interpreter::BytecodeInterpreter;
 use interpreter::Interpreter;
 use treewalk::TreeWalkInterpreter;
-use visitor::AstVisitor;
 
 pub use crate::string::{String, Symbol};
 
@@ -58,7 +57,6 @@ fn main() -> io::Result<()> {
     let opts = argp::Options::parse();
 
     if opts.print_only {
-        let mut p = printer::Printer;
         let ast = crate::parser::Parser::gen_ast(
             std::fs::read_to_string(opts.filename.unwrap())
                 .unwrap()
@@ -66,7 +64,7 @@ fn main() -> io::Result<()> {
             None,
         )
         .unwrap();
-        println!("{}", p.visit_ast(&ast).unwrap());
+        println!("{}", printer::Printer::print(&ast));
         return Ok(());
     }
 

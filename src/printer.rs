@@ -1,14 +1,28 @@
 use crate::{
-    ast::{Ast, BinaryOperator, Block, Literal, Statement, UnaryOperator},
+    ast::{Ast, AstNode, BinaryOperator, Block, Literal, Statement, UnaryOperator},
     visitor::AstVisitor,
 };
 
-pub struct Printer;
+pub struct Printer {
+    indent: usize,
+    indent_str: &'static str,
+}
 
 impl Printer {
     pub fn print(ast: &Ast) -> std::string::String {
-        let mut printer = Printer;
+        let mut printer = Printer::new();
         printer.visit_ast(ast).unwrap()
+    }
+
+    fn new() -> Self {
+        Printer {
+            indent: 0,
+            indent_str: "    ",
+        }
+    }
+
+    fn newline(&self) -> std::string::String {
+        "\n".to_string() + &self.indent_str.repeat(self.indent)
     }
 }
 
@@ -16,13 +30,22 @@ impl AstVisitor for Printer {
     type Good = std::string::String;
     type Bad = ();
 
+    fn visit_node(&mut self, node: &crate::ast::AstNode) -> Result<Self::Good, Self::Bad> {
+        let mut buf = self.newline();
+        buf += &match node {
+            AstNode::Expression(e) => self.visit_expr(e)?,
+            AstNode::Statement(s) => self.visit_statement(s)?,
+        };
+        Ok(buf)
+    }
+
     fn visit_statement(&mut self, s: &Statement) -> Result<Self::Good, Self::Bad> {
         let mut buf = match s {
             Statement::Declaration(id, e, is_const) => self.visit_declaration(id, e, *is_const)?,
             Statement::Assignment(id, e) => self.visit_assignment(id, e)?,
             Statement::Expression(e) => self.visit_expr(e)?,
         };
-        buf += ";\n";
+        buf += ";";
         Ok(buf)
     }
 
@@ -142,11 +165,14 @@ impl AstVisitor for Printer {
     }
 
     fn visit_block(&mut self, block: &crate::ast::Block) -> Result<Self::Good, Self::Bad> {
-        let mut buf = "{\n".to_string();
+        self.indent += 1;
+        let mut buf = "{".to_string();
         let Block(nodes) = block;
         for node in nodes.iter() {
             buf += &self.visit_node(node)?;
         }
+        self.indent -= 1;
+        buf += &self.newline();
         buf += "}";
         Ok(buf)
     }
@@ -169,7 +195,7 @@ impl AstVisitor for Printer {
         buf += &self.visit_expr(cond)?;
         buf += ") ";
         buf += &self.visit_block(if_true)?;
-        buf += "else ";
+        buf += " else ";
         buf += &self.visit_block(if_false)?;
         Ok(buf)
     }
