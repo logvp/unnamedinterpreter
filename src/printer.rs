@@ -6,9 +6,12 @@ use crate::{
 pub struct Printer {
     indent: usize,
     indent_str: &'static str,
+    // precedence: usize,
 }
 
 impl Printer {
+    const FOUR_SPACE: &'static str = "    ";
+
     pub fn print(ast: &Ast) -> std::string::String {
         let mut printer = Printer::new();
         printer.visit_ast(ast).unwrap()
@@ -17,7 +20,8 @@ impl Printer {
     fn new() -> Self {
         Printer {
             indent: 0,
-            indent_str: "    ",
+            indent_str: Self::FOUR_SPACE,
+            // precedence: 0,
         }
     }
 

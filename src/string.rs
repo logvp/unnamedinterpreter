@@ -15,6 +15,11 @@ where
         Self(value.into())
     }
 }
+impl AsRef<str> for String {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
 
 thread_local! {
     pub static EMPTY: String = String::from("");
@@ -37,7 +42,7 @@ where
 }
 impl AsRef<str> for Symbol {
     fn as_ref(&self) -> &str {
-        self.0 .0.as_ref()
+        self.0.as_ref()
     }
 }
 
