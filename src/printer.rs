@@ -204,8 +204,7 @@ impl AstVisitor for Printer {
     fn visit_block(&mut self, block: &crate::ast::Block) -> Result<Self::Good, Self::Bad> {
         self.indent += 1;
         let mut buf = "{".to_string();
-        let Block(nodes) = block;
-        for node in nodes.iter() {
+        for node in block.iter() {
             buf += &self.visit_node(node)?;
         }
         self.indent -= 1;
@@ -232,7 +231,7 @@ impl AstVisitor for Printer {
         buf += &self.visit_expr(cond)?;
         buf += ") ";
         buf += &self.visit_block(if_true)?;
-        match if_false.0.as_ref() {
+        match if_false.as_ref() {
             [] => {}
             [AstNode::Expression(Expression::IfElse(elif_cond, elif_true, elif_false))] => {
                 buf += " else ";

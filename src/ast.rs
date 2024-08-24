@@ -1,8 +1,4 @@
-use std::{
-    fmt::Display,
-    ops::{Deref, DerefMut},
-    rc::Rc,
-};
+use std::{fmt::Display, ops::Deref, rc::Rc};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Construct {
@@ -32,15 +28,10 @@ pub struct Ast {
     pub nodes: Vec<AstNode>,
 }
 impl Deref for Ast {
-    type Target = Vec<AstNode>;
+    type Target = [AstNode];
 
     fn deref(&self) -> &Self::Target {
         &self.nodes
-    }
-}
-impl DerefMut for Ast {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.nodes
     }
 }
 
@@ -58,6 +49,13 @@ thread_local! {
 impl Block {
     pub fn empty() -> Self {
         Block(EMPTY_BLOCK_DATA.with(Clone::clone))
+    }
+}
+impl Deref for Block {
+    type Target = [AstNode];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

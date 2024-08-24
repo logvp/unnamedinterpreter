@@ -171,12 +171,10 @@ impl AstVisitor for TypeChecker {
         let type_b = self.visit_block(if_false)?;
         if type_a == type_b {
             Ok(type_a)
+        } else if self.unify_branches {
+            Err(TypeError::ExpectedButFound(type_a, type_b))
         } else {
-            if self.unify_branches {
-                Err(TypeError::ExpectedButFound(type_a, type_b))
-            } else {
-                Ok(Type::ExperimentalAny)
-            }
+            Ok(Type::ExperimentalAny)
         }
     }
 
@@ -214,8 +212,7 @@ impl AstVisitor for TypeChecker {
 
     fn visit_block(&mut self, block: &Block) -> Result<Type, TypeError> {
         let mut t = Type::None;
-        let Block(nodes) = block;
-        for node in nodes.iter() {
+        for node in block.iter() {
             t = self.visit_node(node)?;
         }
         Ok(t)

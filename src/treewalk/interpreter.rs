@@ -64,9 +64,8 @@ impl AstVisitor for TreeWalkInterpreter {
         let mut ctx = Self {
             context: Rc::new(Context::new(self.context.clone())),
         };
-        let Block(nodes) = block;
         let mut ret = RuntimeValue::None;
-        for node in nodes.iter() {
+        for node in block.iter() {
             ret = ctx.visit_node(node)?;
         }
         Ok(ret)

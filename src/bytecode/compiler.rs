@@ -286,12 +286,11 @@ impl<'a> AstVisitor for BytecodeCompiler<'a> {
     }
 
     fn visit_block(&mut self, block: &Block) -> Result<Self::Good, Self::Bad> {
-        let Block(nodes) = block;
         // new block = new scope
         self.push_scope();
         let start_index = self.instruction_index();
         self.push_instruction(Instruction::Noop); // Placeholder for CreateScope because number of locals is unknown
-        for node in nodes.iter() {
+        for node in block.iter() {
             self.visit_node(node)?;
         }
         let locals = self.variables.get_num_locals_in_scope(self.current_scope);

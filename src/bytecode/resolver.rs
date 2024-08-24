@@ -345,9 +345,8 @@ impl Resolver {
     }
 
     fn resolve_block(&mut self, block: &Block) -> Result<(), Error> {
-        let Block(nodes) = block;
         self.push_scope();
-        for node in nodes.iter() {
+        for node in block.iter() {
             self.resolve_node(node)?;
         }
         self.pop_scope();

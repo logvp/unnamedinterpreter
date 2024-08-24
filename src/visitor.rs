@@ -95,7 +95,7 @@ pub trait AstVisitor {
 
     fn visit_block(&mut self, block: &Block) -> Result<Self::Good, Self::Bad> {
         let mut ret = Default::default();
-        for node in block.0.iter() {
+        for node in block.iter() {
             ret = self.visit_node(node)?;
         }
         Ok(ret)
