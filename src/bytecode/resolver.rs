@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{Ast, AstNode, Block, Expression, Statement},
+    ast::{Ast, Block, Expression},
     error::{Error, RuntimeError},
+    visitor::AstVisitor,
     Symbol,
 };
 
@@ -240,9 +241,7 @@ impl Resolver {
     }
 
     pub fn resolve(&mut self, ast: &Ast) -> Result<(), Error> {
-        for node in ast.nodes.iter() {
-            self.resolve_node(node)?;
-        }
+        self.visit_ast(ast)
         // for (name, var) in self.global_scope.iter() {
         //     if let GlobalVariable::Unknown = var {
         //         // should not error in REPL mode, but should in file compilation
@@ -250,106 +249,131 @@ impl Resolver {
         //         // return Err(RuntimeError::UnknownIdentifier(name.clone()).into());
         //     }
         // }
-        Ok(())
+        // Ok(())
     }
+}
 
-    fn resolve_node(&mut self, node: &AstNode) -> Result<(), Error> {
-        match node {
-            AstNode::Expression(expr) => self.resolve_expr(expr),
-            AstNode::Statement(stmt) => self.resolve_stmt(stmt),
-        }
-    }
+impl AstVisitor for Resolver {
+    type Good = ();
+    type Bad = Error;
 
-    fn resolve_stmt(&mut self, stmt: &Statement) -> Result<(), Error> {
-        match stmt {
-            Statement::Assignment(lvalue, expr) => {
-                let name = lvalue.name().unwrap();
-                self.scopes
-                    .make_assignment(name, self.current_scope, self.closure_boundary)?;
-
-                self.resolve_expr(expr)?;
-            }
-            Statement::Declaration(ident, expr, is_const) => {
-                self.scopes
-                    .make_declaration(self.current_scope, ident.name.clone(), *is_const)?;
-                self.resolve_expr(expr)?;
-            }
-            Statement::Expression(expr) => {
-                self.resolve_expr(expr)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn resolve_expr(&mut self, expr: &Expression) -> Result<(), Error> {
-        match expr {
-            Expression::Binary(_op, lhs, rhs) => {
-                self.resolve_expr(lhs)?;
-                self.resolve_expr(rhs)?;
-            }
-            Expression::Unary(_op, lhs) => {
-                self.resolve_expr(lhs)?;
-            }
-            Expression::Literal(_literal) => {}
-            Expression::Variable(ident) => {
-                let name = &ident.name;
-                if self.in_local_scope() {
-                    if self
-                        .scopes
-                        .get_local_and_capture(name, self.current_scope, self.closure_boundary)
-                        .is_some()
-                    {
-                        return Ok(());
-                    }
-                    if self.scopes.lookup_global(name).is_err() {
-                        self.scopes
-                            .found_unknown_variable(name.clone(), self.closure_boundary > 0)?
-                    }
-                } else {
-                    self.scopes.lookup_global(name)?;
-                }
-            }
-            Expression::Block(block) => {
-                self.resolve_block(block)?;
-            }
-            Expression::IfElse(expr, if_block, else_block) => {
-                self.resolve_expr(expr)?;
-                self.resolve_block(if_block)?;
-                self.resolve_block(else_block)?;
-            }
-            Expression::While(expr, body) => {
-                self.resolve_expr(expr)?;
-                self.resolve_block(body)?;
-            }
-            Expression::FunctionCall(fun, arguments) => {
-                for arg in arguments.iter() {
-                    self.resolve_expr(arg)?;
-                }
-                self.resolve_expr(fun)?;
-            }
-            Expression::Lambda(parameters, body) => {
-                self.push_scope();
-                for param in parameters.iter() {
-                    // parameters are mutable by default
-                    self.scopes
-                        .make_declaration(self.current_scope, param.name.clone(), false)?;
-                }
-                let saved_closure_boundary = self.closure_boundary;
-                self.closure_boundary = self.current_scope;
-                self.resolve_block(body)?;
-                self.closure_boundary = saved_closure_boundary;
-                self.pop_scope();
-            }
-        }
-        Ok(())
-    }
-
-    fn resolve_block(&mut self, block: &Block) -> Result<(), Error> {
+    fn visit_block(&mut self, block: &Block) -> Result<Self::Good, Self::Bad> {
         self.push_scope();
         for node in block.iter() {
-            self.resolve_node(node)?;
+            self.visit_node(node)?;
         }
         self.pop_scope();
         Ok(())
+    }
+
+    fn visit_literal(&mut self, _: &crate::ast::Literal) -> Result<Self::Good, Self::Bad> {
+        Ok(())
+    }
+
+    fn visit_binary(
+        &mut self,
+        _: crate::ast::BinaryOperator,
+        lhs: &Expression,
+        rhs: &Expression,
+    ) -> Result<Self::Good, Self::Bad> {
+        self.visit_expr(lhs)?;
+        self.visit_expr(rhs)
+    }
+
+    fn visit_unary(
+        &mut self,
+        _: crate::ast::UnaryOperator,
+        e: &Expression,
+    ) -> Result<Self::Good, Self::Bad> {
+        self.visit_expr(e)
+    }
+
+    fn visit_variable(&mut self, var: &crate::ast::Identifier) -> Result<Self::Good, Self::Bad> {
+        let name = &var.name;
+        if self.in_local_scope() {
+            if self
+                .scopes
+                .get_local_and_capture(name, self.current_scope, self.closure_boundary)
+                .is_some()
+            {
+                return Ok(());
+            }
+            if self.scopes.lookup_global(name).is_err() {
+                self.scopes
+                    .found_unknown_variable(name.clone(), self.closure_boundary > 0)?
+            }
+        } else {
+            self.scopes.lookup_global(name)?;
+        }
+        Ok(())
+    }
+
+    fn visit_if_else(
+        &mut self,
+        cond: &Expression,
+        if_true: &Block,
+        if_false: &Block,
+    ) -> Result<Self::Good, Self::Bad> {
+        self.visit_expr(cond)?;
+        self.visit_block(if_true)?;
+        self.visit_block(if_false)
+    }
+
+    fn visit_while(&mut self, cond: &Expression, body: &Block) -> Result<Self::Good, Self::Bad> {
+        self.visit_expr(cond)?;
+        self.visit_block(body)
+    }
+
+    fn visit_function_call(
+        &mut self,
+        func: &Expression,
+        args: &[Expression],
+    ) -> Result<Self::Good, Self::Bad> {
+        for arg in args.iter() {
+            self.visit_expr(arg)?;
+        }
+        self.visit_expr(func)
+    }
+
+    fn visit_lambda(
+        &mut self,
+        params: &[crate::ast::Identifier],
+        body: &Block,
+    ) -> Result<Self::Good, Self::Bad> {
+        self.push_scope();
+        for param in params.iter() {
+            // parameters are mutable by default
+            self.scopes
+                .make_declaration(self.current_scope, param.name.clone(), false)?;
+        }
+        let saved_closure_boundary = self.closure_boundary;
+        self.closure_boundary = self.current_scope;
+        self.visit_block(body)?;
+        self.closure_boundary = saved_closure_boundary;
+        self.pop_scope();
+        Ok(())
+    }
+
+    fn visit_assignment(
+        &mut self,
+        id: &crate::ast::Lvalue,
+        e: &Expression,
+    ) -> Result<Self::Good, Self::Bad> {
+        let name = id.name().unwrap();
+        self.scopes
+            .make_assignment(name, self.current_scope, self.closure_boundary)?;
+
+        self.visit_expr(e)
+    }
+
+    fn visit_declaration(
+        &mut self,
+        id: &crate::ast::Identifier,
+        e: &Expression,
+        is_const: bool,
+    ) -> Result<Self::Good, Self::Bad> {
+        self.scopes
+            .make_declaration(self.current_scope, id.name.clone(), is_const)?;
+        self.visit_expr(e)
     }
 }
