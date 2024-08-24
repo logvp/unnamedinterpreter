@@ -1,12 +1,13 @@
 use crate::{
     ast::{Ast, AstNode, BinaryOperator, Block, Expression, Literal, Statement, UnaryOperator},
+    parser,
     visitor::AstVisitor,
 };
 
 pub struct Printer {
     indent: usize,
     indent_str: &'static str,
-    // precedence: usize,
+    precedence: u8,
 }
 
 impl Printer {
@@ -14,19 +15,48 @@ impl Printer {
 
     pub fn print(ast: &Ast) -> std::string::String {
         let mut printer = Printer::new();
-        printer.visit_ast(ast).unwrap()
+        let text = printer.visit_ast(ast).unwrap();
+        assert_eq!(printer.indent, 0);
+        assert_eq!(printer.precedence, 0);
+        text
     }
 
     fn new() -> Self {
         Printer {
             indent: 0,
             indent_str: Self::FOUR_SPACE,
-            // precedence: 0,
+            precedence: 0,
         }
     }
 
     fn newline(&self) -> std::string::String {
         "\n".to_string() + &self.indent_str.repeat(self.indent)
+    }
+
+    fn parenthesize(
+        &mut self,
+        precedence: u8,
+        mut inner: impl FnMut(&mut Self) -> Result<String, ()>,
+    ) -> Result<String, ()> {
+        let mut buf = String::new();
+
+        let needs_parens = precedence <= self.precedence;
+        if needs_parens {
+            buf += "(";
+        }
+
+        let saved_precedence = self.precedence;
+        self.precedence = precedence;
+
+        buf += &inner(self)?;
+
+        if needs_parens {
+            buf += ")";
+        }
+
+        self.precedence = saved_precedence;
+
+        Ok(buf)
     }
 }
 
@@ -134,24 +164,25 @@ impl AstVisitor for Printer {
         rhs: &crate::ast::Expression,
     ) -> Result<Self::Good, Self::Bad> {
         // parenthesis are needed if this operator precedence is lower than the outer operator precedence
-        let mut buf = "(".to_string();
-        buf += &self.visit_expr(lhs)?;
-        buf += match op {
-            BinaryOperator::Equal => " == ",
-            BinaryOperator::NotEqual => " /= ",
-            BinaryOperator::LessThan => " < ",
-            BinaryOperator::LessEqual => " <= ",
-            BinaryOperator::GreaterThan => " > ",
-            BinaryOperator::GreaterEqual => " >= ",
-            BinaryOperator::Add => " + ",
-            BinaryOperator::Subtract => " - ",
-            BinaryOperator::Multiply => " * ",
-            BinaryOperator::Divide => " / ",
-            BinaryOperator::Concatenate => " ++ ",
-        };
-        buf += &self.visit_expr(rhs)?;
-        buf += ")";
-        Ok(buf)
+        let this_precedence = parser::Parser::infix_power(op).0;
+        self.parenthesize(this_precedence, |s| {
+            let mut buf = s.visit_expr(lhs)?;
+            buf += match op {
+                BinaryOperator::Equal => " == ",
+                BinaryOperator::NotEqual => " /= ",
+                BinaryOperator::LessThan => " < ",
+                BinaryOperator::LessEqual => " <= ",
+                BinaryOperator::GreaterThan => " > ",
+                BinaryOperator::GreaterEqual => " >= ",
+                BinaryOperator::Add => " + ",
+                BinaryOperator::Subtract => " - ",
+                BinaryOperator::Multiply => " * ",
+                BinaryOperator::Divide => " / ",
+                BinaryOperator::Concatenate => " ++ ",
+            };
+            buf += &s.visit_expr(rhs)?;
+            Ok(buf)
+        })
     }
 
     fn visit_unary(
@@ -159,13 +190,15 @@ impl AstVisitor for Printer {
         op: crate::ast::UnaryOperator,
         e: &crate::ast::Expression,
     ) -> Result<Self::Good, Self::Bad> {
-        let mut buf = "(".to_string();
-        buf += match op {
-            UnaryOperator::Negate => "-",
-        };
-        buf += &self.visit_expr(e)?;
-        buf += ")";
-        Ok(buf)
+        let precedence = parser::Parser::prefix_power(op);
+        self.parenthesize(precedence, |s| {
+            let mut buf = match op {
+                UnaryOperator::Negate => "-",
+            }
+            .to_string();
+            buf += &s.visit_expr(e)?;
+            Ok(buf)
+        })
     }
 
     fn visit_block(&mut self, block: &crate::ast::Block) -> Result<Self::Good, Self::Bad> {

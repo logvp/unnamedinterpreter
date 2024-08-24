@@ -190,7 +190,7 @@ impl Parser {
 
     // Higher number = higher precedence
     // Equal left and right precedence means parenthesis are required
-    fn infix_power(op: BinaryOperator) -> (u8, u8) {
+    pub fn infix_power(op: BinaryOperator) -> (u8, u8) {
         match op {
             BinaryOperator::Add | BinaryOperator::Subtract => (5, 6),
             BinaryOperator::Multiply | BinaryOperator::Divide => (9, 10),
@@ -204,7 +204,7 @@ impl Parser {
         }
     }
 
-    fn prefix_power(op: UnaryOperator) -> u8 {
+    pub fn prefix_power(op: UnaryOperator) -> u8 {
         match op {
             UnaryOperator::Negate => 15,
         }
