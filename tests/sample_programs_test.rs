@@ -1,4 +1,4 @@
-use unnamedinterpreter as ui;
+use unnamedinterpreter::{self as ui, bytecode, treewalk};
 use ui::interpreter::Interpreter;
 
 const PROGRAM: &str = r#"
@@ -43,25 +43,34 @@ fn bytecode_interpreter() {
     }
 }
 
-#[test]
-fn examples() {
+fn examples<I: Interpreter>() {
     use std::fs;
 
     for file in fs::read_dir("./examples").unwrap() {
-        for result in ui::repl::run_file::<ui::InterpreterImpl, _>(&file.unwrap().path()).unwrap() {
+        for result in ui::repl::run_file::<I, _>(&file.unwrap().path()).unwrap() {
             result.unwrap();
         }
     }
 }
 
 #[test]
-fn should_error() {
+fn examples_treewalk() {
+    examples::<ui::treewalk::TreeWalkInterpreter>();
+}
+
+#[ignore]
+#[test]
+fn examples_bytecode() {
+    examples::<ui::bytecode::interpreter::BytecodeInterpreter>();
+}
+
+fn should_error<I: Interpreter>() {
     use std::fs;
 
     for path in ["./err/lexical", "./err/runtime"] {
         'file_loop: for file in fs::read_dir(path).unwrap() {
             for result in
-                ui::repl::run_file::<ui::InterpreterImpl, _>(&file.as_ref().unwrap().path()).unwrap()
+                ui::repl::run_file::<I, _>(&file.as_ref().unwrap().path()).unwrap()
             {
                 if result.is_err() {
                     break 'file_loop;
@@ -70,4 +79,14 @@ fn should_error() {
             panic!("{:?} No errors present!", &file);
         }
     }
+}
+
+#[test]
+fn should_error_treewalk() {
+    should_error::<treewalk::TreeWalkInterpreter>();
+}
+
+#[test]
+fn should_error_bytecode() {
+    should_error::<bytecode::interpreter::BytecodeInterpreter>();
 }
