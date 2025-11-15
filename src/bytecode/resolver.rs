@@ -174,11 +174,10 @@ impl ResolutionTable {
         while scope > 0 {
             let s = self.local_scopes.get_mut(scope - 1).unwrap();
             if let Some(var) = s.data.get_mut(ident) {
-                if scope < closure_boundary {
-                    if let LocalVariable::Local { is_const, .. } = *var {
+                if scope < closure_boundary
+                    && let LocalVariable::Local { is_const, .. } = *var {
                         *var = LocalVariable::Captured { is_const }
                     }
-                }
                 return Some(*var);
             }
             scope = s.parent;
