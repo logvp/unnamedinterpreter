@@ -42,7 +42,7 @@ impl<'a> BytecodeCompiler<'a> {
         variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
         let mut compiler = BytecodeCompiler::new(start_index, variables);
-        for node in ast.nodes.iter() {
+        for node in &ast.nodes {
             compiler.compile_node(node)?;
         }
         Ok(ProgramChunk {

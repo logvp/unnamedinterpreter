@@ -61,11 +61,11 @@ impl Eval for Statement {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Declaration(lhs, rhs, is_const) => {
-                if !ctx.contains_in_scope(&lhs.name) {
+                if ctx.contains_in_scope(&lhs.name) {
+                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
+                } else {
                     let value = rhs.eval(Rc::clone(&ctx))?;
                     ctx.declare(lhs.name.to_string(), value, *is_const);
-                } else {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
@@ -81,7 +81,7 @@ impl Eval for Statement {
             Self::Expression(expr) => {
                 expr.eval(ctx)?;
             }
-        };
+        }
         Ok(RuntimeValue::None)
     }
 }

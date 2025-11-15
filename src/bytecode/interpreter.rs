@@ -135,9 +135,8 @@ impl VirtualMachine {
                 GlobalVariable::Constant => {
                     if self.globals.contains_key(name.as_ref()) {
                         return Err(RuntimeError::ConstReassignment(name.to_string()).into());
-                    } else {
-                        self.globals.insert(Rc::clone(name), self.result.take());
                     }
+                    self.globals.insert(Rc::clone(name), self.result.take());
                 }
                 GlobalVariable::NotConstant => {
                     self.globals.insert(Rc::clone(name), self.result.take());
@@ -149,7 +148,7 @@ impl VirtualMachine {
                 .as_ref()
                 .expect("Attempted to access Env with no dynamic environment")
                 .set(name, self.result.take()),
-        };
+        }
         Ok(())
     }
 
@@ -257,9 +256,8 @@ impl BytecodeInterpreter {
                 if let Some((ip, _)) = self.call_stack.pop() {
                     vm.ip = ip;
                     continue;
-                } else {
-                    break;
                 }
+                break;
             }
             // println!(
             //     "procedure: {}; ip: {}; {:?}",

@@ -104,7 +104,7 @@ impl ResolutionTable {
                     | LocalVariable::Captured { is_const: true },
                 ) => return Err(RuntimeError::ConstReassignment(ident.to_string()).into()),
                 None => match self.global_scope.get(&ident) {
-                    Some(GlobalVariable::NotConstant) | Some(GlobalVariable::Unknown) => {}
+                    Some(GlobalVariable::NotConstant | GlobalVariable::Unknown) => {}
                     Some(GlobalVariable::Constant) => {
                         return Err(RuntimeError::ConstReassignment(ident.to_string()).into());
                     }
@@ -189,7 +189,7 @@ impl ResolutionTable {
         if scope == 0 {
             return None;
         }
-        self.local_scopes[scope - 1].data.get(ident).cloned()
+        self.local_scopes[scope - 1].data.get(ident).copied()
     }
 }
 
@@ -230,7 +230,7 @@ impl Resolver {
     }
 
     pub fn define_globals(&mut self, identifiers: &[Rc<str>]) {
-        for ident in identifiers.iter() {
+        for ident in identifiers {
             self.scopes
                 .make_declaration(0, Rc::clone(ident), false)
                 .unwrap()
@@ -238,7 +238,7 @@ impl Resolver {
     }
 
     pub fn resolve(&mut self, ast: &Ast) -> Result<(), Error> {
-        for node in ast.nodes.iter() {
+        for node in &ast.nodes {
             self.resolve_node(node)?;
         }
         // for (name, var) in self.global_scope.iter() {

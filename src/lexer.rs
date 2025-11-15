@@ -158,9 +158,8 @@ impl Lexer {
                     }) = tokens.back()
                     {
                         continue;
-                    } else {
-                        TokenKind::Newline
                     }
+                    TokenKind::Newline
                 }
                 _ if c.is_whitespace() => continue,
                 '0' if next_if_eq(&mut chars, 'x', &mut loc) => {
