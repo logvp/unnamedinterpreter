@@ -137,7 +137,9 @@ impl Parser {
         } else {
             match self.token() {
                 TokenKind::Literal(_) => {
-                    let TokenKind::Literal(x) = self.consume() else {unreachable!() };
+                    let TokenKind::Literal(x) = self.consume() else {
+                        unreachable!()
+                    };
                     Expression::Literal(x)
                 }
                 TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
@@ -156,7 +158,7 @@ impl Parser {
                         ort,
                         self.loc.clone(),
                     )
-                    .into())
+                    .into());
                 }
             }
         };
@@ -168,7 +170,9 @@ impl Parser {
                 continue;
             }
 
-            let Some(op) = Self::convert_infix_operator(self.token()) else { break; };
+            let Some(op) = Self::convert_infix_operator(self.token()) else {
+                break;
+            };
 
             let (l_pow, r_pow) = Self::infix_power(op);
             if l_pow == min_pow {

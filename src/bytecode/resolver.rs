@@ -106,7 +106,7 @@ impl ResolutionTable {
                 None => match self.global_scope.get(&ident) {
                     Some(GlobalVariable::NotConstant) | Some(GlobalVariable::Unknown) => {}
                     Some(GlobalVariable::Constant) => {
-                        return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
+                        return Err(RuntimeError::ConstReassignment(ident.to_string()).into());
                     }
                     None => self.found_unknown_variable(ident, closure_boundary > 0)?,
                 },
@@ -115,7 +115,7 @@ impl ResolutionTable {
             match self.global_scope.get(&ident) {
                 Some(GlobalVariable::NotConstant) => {}
                 Some(GlobalVariable::Constant) => {
-                    return Err(RuntimeError::ConstReassignment(ident.to_string()).into())
+                    return Err(RuntimeError::ConstReassignment(ident.to_string()).into());
                 }
                 Some(GlobalVariable::Unknown) | None => {
                     self.found_unknown_variable(ident, closure_boundary > 0)?
