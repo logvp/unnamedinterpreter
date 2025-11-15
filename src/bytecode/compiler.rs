@@ -28,7 +28,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn new(start_index: usize, variables: &'a ResolutionTable) -> Self {
         BytecodeCompiler {
             start_index,
-            procedures: vec![Default::default()],
+            procedures: vec![Vec::default()],
             procedure_index: vec![0],
             variables,
             current_scope: 0,
@@ -37,12 +37,12 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     pub fn gen_bytecode(
-        ast: Ast,
+        ast: &Ast,
         start_index: usize,
         variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
         let mut compiler = BytecodeCompiler::new(start_index, variables);
-        for node in ast.nodes.iter() {
+        for node in &ast.nodes {
             compiler.compile_node(node)?;
         }
         Ok(ProgramChunk {
@@ -79,7 +79,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn push_procedure(&mut self) -> usize {
         self.push_scope();
         let index = self.procedures.len();
-        self.procedures.push(Default::default());
+        self.procedures.push(Vec::new());
         self.procedure_index.push(index);
         index + self.start_index
     }
@@ -131,6 +131,8 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
+    // TODO: Ast visitor
+    #[expect(clippy::too_many_lines)]
     fn compile_expr(&mut self, expr: &Expression) -> Result<(), Error> {
         match expr {
             Expression::Binary(op, lhs, rhs) => {

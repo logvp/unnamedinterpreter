@@ -29,7 +29,7 @@ pub const INTRINSICS: [IntrinsicFunction; 3] = [
 ];
 
 impl IntrinsicFunction {
-    pub(super) fn exec(&self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {
+    pub(super) fn exec(self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {
         match self {
             IntrinsicFunction::Print => {
                 for arg in vm
@@ -47,15 +47,14 @@ impl IntrinsicFunction {
             }
             IntrinsicFunction::TypeOf => {
                 if argc != 1 {
-                    Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
-                } else {
-                    vm.result.set(Value::String(Rc::from(format!(
-                        "{}",
-                        vm.stack.get(vm.stack_p.get() - argc).unwrap().type_of()
-                    ))));
-                    vm.pop_stack_p();
-                    Ok(())
+                    return Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
                 }
+                vm.result.set(Value::String(Rc::from(format!(
+                    "{}",
+                    vm.stack.get(vm.stack_p.get() - argc).unwrap().type_of()
+                ))));
+                vm.pop_stack_p();
+                Ok(())
             }
             IntrinsicFunction::Debug => {
                 for arg in vm

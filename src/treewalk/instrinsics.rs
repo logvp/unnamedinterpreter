@@ -20,10 +20,10 @@ impl IntrinsicFunction {
                 Ok(RuntimeValue::None)
             }
             IntrinsicFunction::TypeOf => {
-                if args.len() != 1 {
-                    Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
-                } else {
+                if args.len() == 1 {
                     Ok(RuntimeValue::String(format!("{}", args[0].get_type())))
+                } else {
+                    Err(RuntimeError::ExpectedArgumentsFound(1, args.len()).into())
                 }
             }
             IntrinsicFunction::Debug => {

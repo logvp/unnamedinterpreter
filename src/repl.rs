@@ -79,7 +79,7 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
                 "REPL: \n> {:?}",
                 self.macros.get(words.next().unwrap())
             )?,
-            Some("PLAY") => self.play_macro(words.next().unwrap().to_string())?,
+            Some("PLAY") => self.play_macro(words.next().unwrap())?,
             Some("{") => self.start_buffering(),
             Some("}") => self.send_buffer()?,
             _ => writeln!(
@@ -101,8 +101,8 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
         self.macro_buffer.clear();
         self.name.clear();
     }
-    fn play_macro(&mut self, name: String) -> io::Result<()> {
-        let playback = self.macros.get(&name).unwrap();
+    fn play_macro(&mut self, name: &str) -> io::Result<()> {
+        let playback = self.macros.get(name).unwrap();
         let result = self.interpreter.interpret(playback, None);
         Self::print_results(&mut self.output, &result)?;
         Ok(())
@@ -170,7 +170,7 @@ pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
     path: &P,
 ) -> io::Result<Vec<Result<T::ReplReturn, Error>>> {
     let content = std::fs::read_to_string(path)?;
-    Ok(T::new().interpret(&content, path.as_ref().to_str().map(|name| Rc::from(name))))
+    Ok(T::new().interpret(&content, path.as_ref().to_str().map(Rc::from)))
 }
 
 pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {

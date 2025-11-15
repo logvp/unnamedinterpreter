@@ -108,11 +108,8 @@ pub struct Lexer {
     end: Loc,
 }
 impl Lexer {
+    #[allow(clippy::too_many_lines)]
     pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexicalError> {
-        let mut chars = text.chars().peekable();
-        let mut tokens: VecDeque<Token> = VecDeque::new();
-        let mut buffer = String::new();
-        let mut loc = Loc::new(filename);
         fn build_buffer_while(
             buffer: &mut String,
             loc: &mut Loc,
@@ -147,6 +144,10 @@ impl Lexer {
                 loc: loc.clone(),
             })
         }
+        let mut chars = text.chars().peekable();
+        let mut tokens: VecDeque<Token> = VecDeque::new();
+        let mut buffer = String::new();
+        let mut loc = Loc::new(filename);
         while let Some(c) = chars.next() {
             loc.inc(c);
             let token = match c {
@@ -158,9 +159,8 @@ impl Lexer {
                     }) = tokens.back()
                     {
                         continue;
-                    } else {
-                        TokenKind::Newline
                     }
+                    TokenKind::Newline
                 }
                 _ if c.is_whitespace() => continue,
                 '0' if next_if_eq(&mut chars, 'x', &mut loc) => {
@@ -190,25 +190,25 @@ impl Lexer {
                 }
                 '-' if next_if_eq(&mut chars, '-', &mut loc) => {
                     // chomp until the end of the line
-                    while let Some(_) = chars.next_if(|&x| x != '\n') {}
+                    while chars.next_if(|&x| x != '\n').is_some() {}
                     continue;
                 }
                 '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                     fn chomp_comment(
-                        mut chars: &mut Peekable<impl Iterator<Item = char>>,
+                        chars: &mut Peekable<impl Iterator<Item = char>>,
                         start_loc: Loc,
                     ) -> Result<Loc, LexicalError> {
                         let mut loc = start_loc.clone();
                         while let Some(c) = chars.next() {
                             match c {
-                                '{' if next_if_eq(&mut chars, '-', &mut loc) => {
+                                '{' if next_if_eq(chars, '-', &mut loc) => {
                                     loc = chomp_comment(chars, loc)?;
                                 }
-                                '-' if next_if_eq(&mut chars, '}', &mut loc) => return Ok(loc),
+                                '-' if next_if_eq(chars, '}', &mut loc) => return Ok(loc),
                                 _ => loc.inc(c),
                             }
                         }
-                        return Err(LexicalError::UnmatchedMultilineComment(start_loc));
+                        Err(LexicalError::UnmatchedMultilineComment(start_loc))
                     }
                     loc = chomp_comment(&mut chars, loc)?;
                     continue;
@@ -276,7 +276,8 @@ impl Lexer {
                         &mut chars,
                         |c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'),
                     );
-                    let tok = match buffer.as_str() {
+                    
+                    match buffer.as_str() {
                         "true" => TokenKind::Literal(Literal::Boolean(true)),
                         "false" => TokenKind::Literal(Literal::Boolean(false)),
                         "var" => TokenKind::Var,
@@ -289,8 +290,7 @@ impl Lexer {
                         "if" => TokenKind::If,
                         "else" => TokenKind::Else,
                         _ => TokenKind::Identifier(Rc::from(buffer.clone())),
-                    };
-                    tok
+                    }
                 }
                 _ => {
                     build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |c| {

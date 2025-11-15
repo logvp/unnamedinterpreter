@@ -59,7 +59,7 @@ thread_local! {
 }
 impl Block {
     pub fn empty() -> Self {
-        Block(EMPTY_BLOCK_DATA.with(|x| x.clone()))
+        Block(EMPTY_BLOCK_DATA.with(Rc::clone))
     }
 }
 
@@ -113,6 +113,7 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
+    #[expect(clippy::unnecessary_wraps)]
     pub fn name(&self) -> Option<Rc<str>> {
         match self {
             Self::Identifier(ident) => Some(ident.name.clone()),

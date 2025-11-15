@@ -127,7 +127,7 @@ pub(super) struct Context {
 impl Context {
     pub(super) fn init_global() -> Self {
         let global = Context {
-            data: Default::default(),
+            data: RefCell::default(),
             parent: None,
         };
         global.declare(
@@ -188,11 +188,11 @@ impl Context {
             if self.is_const(&key).unwrap() {
                 Err(RuntimeError::ConstReassignment(key))
             } else {
-                let var = Variable {
+                let variable = Variable {
                     val,
                     is_const: false,
                 };
-                self.data.borrow_mut().insert(key, var);
+                self.data.borrow_mut().insert(key, variable);
                 Ok(())
             }
         } else if let Some(parent) = &self.parent {
@@ -212,7 +212,7 @@ impl Context {
 
     pub(super) fn new(parent: Rc<Self>) -> Self {
         Context {
-            data: Default::default(),
+            data: RefCell::default(),
             parent: Some(parent),
         }
     }

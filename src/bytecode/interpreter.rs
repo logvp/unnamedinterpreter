@@ -26,7 +26,7 @@ pub struct Environment {
 impl Environment {
     fn new(parent: Option<Rc<Environment>>) -> Self {
         Environment {
-            data: Default::default(),
+            data: Rc::default(),
             parent,
         }
     }
@@ -135,9 +135,8 @@ impl VirtualMachine {
                 GlobalVariable::Constant => {
                     if self.globals.contains_key(name.as_ref()) {
                         return Err(RuntimeError::ConstReassignment(name.to_string()).into());
-                    } else {
-                        self.globals.insert(Rc::clone(name), self.result.take());
                     }
+                    self.globals.insert(Rc::clone(name), self.result.take());
                 }
                 GlobalVariable::NotConstant => {
                     self.globals.insert(Rc::clone(name), self.result.take());
@@ -149,14 +148,14 @@ impl VirtualMachine {
                 .as_ref()
                 .expect("Attempted to access Env with no dynamic environment")
                 .set(name, self.result.take()),
-        };
+        }
         Ok(())
     }
 
     fn alloc_locals(&mut self, num: usize) {
         let _ = self.result.take();
         for _ in 0..num {
-            self.local.push(Default::default())
+            self.local.push(Value::None)
         }
     }
 
@@ -176,10 +175,10 @@ impl Interpreter for BytecodeInterpreter {
 
     fn new() -> Self {
         let mut interpreter = BytecodeInterpreter {
-            vm: Default::default(),
+            vm: VirtualMachine::default(),
             resolver: Resolver::new(),
-            call_stack: Default::default(),
-            procedures: Default::default(),
+            call_stack: Vec::default(),
+            procedures: Vec::default(),
         };
         interpreter.define_intrinsics();
         interpreter
@@ -198,7 +197,7 @@ impl Interpreter for BytecodeInterpreter {
             return vec![Err(e)];
         }
         let program = match BytecodeCompiler::gen_bytecode(
-            ast,
+            &ast,
             self.procedures.len(),
             self.resolver.get_table(),
         ) {
@@ -257,9 +256,8 @@ impl BytecodeInterpreter {
                 if let Some((ip, _)) = self.call_stack.pop() {
                     vm.ip = ip;
                     continue;
-                } else {
-                    break;
                 }
+                break;
             }
             // println!(
             //     "procedure: {}; ip: {}; {:?}",
