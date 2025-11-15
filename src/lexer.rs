@@ -195,7 +195,7 @@ impl Lexer {
                 }
                 '{' if next_if_eq(&mut chars, '-', &mut loc) => {
                     fn chomp_comment(
-                        mut chars: &mut Peekable<impl Iterator<Item = char>>,
+                        chars: &mut Peekable<impl Iterator<Item = char>>,
                         start_loc: Loc,
                     ) -> Result<Loc, LexicalError> {
                         let mut loc = start_loc.clone();
