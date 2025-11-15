@@ -9,11 +9,11 @@ mod treewalk;
 
 use std::{env, io};
 
-use bytecode::interpreter::BytecodeInterpreter;
+// use bytecode::interpreter::BytecodeInterpreter;
 #[cfg(test)]
 use interpreter::Interpreter;
 
-type InterpreterImpl = BytecodeInterpreter;
+type InterpreterImpl = treewalk::TreeWalkInterpreter;
 
 fn main() -> io::Result<()> {
     let filename = env::args().nth(1);
