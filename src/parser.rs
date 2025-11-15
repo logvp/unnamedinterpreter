@@ -22,16 +22,16 @@ impl Parser {
     pub fn gen_ast(text: &str, filename: Option<Rc<str>>) -> Result<Ast, Error> {
         let mut parser = Parser::new(text, filename)?;
         parser
-            .parse_ast_nodes(TokenKind::Eof, Construct::TopLevel)
+            .parse_ast_nodes(&TokenKind::Eof, Construct::TopLevel)
             .map(|x| Ast { nodes: x })
     }
 
     fn parse_ast_nodes(
         &mut self,
-        delimiter: TokenKind,
+        delimiter: &TokenKind,
         ort: Construct,
     ) -> Result<Vec<AstNode>, Error> {
-        let mut ast: Vec<AstNode> = Default::default();
+        let mut ast: Vec<AstNode> = Vec::default();
         while !delimiter.kind_eq(self.token()) {
             let node = self.parse_ast_node()?;
             match node {
@@ -245,7 +245,7 @@ impl Parser {
 
     fn parse_braced_block(&mut self, ort: Construct) -> Result<Block, Error> {
         self.expect(TokenKind::LeftBrace, ort)?;
-        let block = self.parse_ast_nodes(TokenKind::RightBrace, ort)?;
+        let block = self.parse_ast_nodes(&TokenKind::RightBrace, ort)?;
         Ok(Block(Rc::from(block)))
     }
 
@@ -302,7 +302,7 @@ impl Parser {
     fn parse_lambda_params(&mut self) -> Result<Vec<Identifier>, Error> {
         const ORT: Construct = Construct::ParameterList;
         self.expect(TokenKind::LeftParen, ORT)?;
-        let mut params: Vec<Identifier> = Default::default();
+        let mut params: Vec<Identifier> = Vec::default();
         if !matches!(self.token(), TokenKind::RightParen) {
             params.push(self.parse_identifier(ORT)?);
 
@@ -318,7 +318,7 @@ impl Parser {
     fn parse_function_args(&mut self) -> Result<Rc<[Expression]>, Error> {
         const ORT: Construct = Construct::FunctionCall;
         self.expect(TokenKind::LeftParen, ORT)?;
-        let mut args: Vec<Expression> = Default::default();
+        let mut args: Vec<Expression> = Vec::default();
         if !matches!(self.token(), TokenKind::RightParen) && !self.eof() {
             args.push(self.parse_expression(ORT)?);
 

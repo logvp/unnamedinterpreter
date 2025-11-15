@@ -26,7 +26,7 @@ impl Interpreter for TreeWalkInterpreter {
         text: &str,
         filename: Option<Rc<str>>,
     ) -> Vec<Result<RuntimeValue, Error>> {
-        let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
+        let mut ret: Vec<Result<RuntimeValue, Error>> = Vec::default();
         match Parser::gen_ast(text, filename) {
             Ok(ast) => {
                 for node in ast.iter() {

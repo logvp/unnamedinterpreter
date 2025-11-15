@@ -127,7 +127,7 @@ pub(super) struct Context {
 impl Context {
     pub(super) fn init_global() -> Self {
         let global = Context {
-            data: Default::default(),
+            data: RefCell::default(),
             parent: None,
         };
         global.declare(
@@ -212,7 +212,7 @@ impl Context {
 
     pub(super) fn new(parent: Rc<Self>) -> Self {
         Context {
-            data: Default::default(),
+            data: RefCell::default(),
             parent: Some(parent),
         }
     }

@@ -109,10 +109,6 @@ pub struct Lexer {
 }
 impl Lexer {
     pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexicalError> {
-        let mut chars = text.chars().peekable();
-        let mut tokens: VecDeque<Token> = VecDeque::new();
-        let mut buffer = String::new();
-        let mut loc = Loc::new(filename);
         fn build_buffer_while(
             buffer: &mut String,
             loc: &mut Loc,
@@ -147,6 +143,10 @@ impl Lexer {
                 loc: loc.clone(),
             })
         }
+        let mut chars = text.chars().peekable();
+        let mut tokens: VecDeque<Token> = VecDeque::new();
+        let mut buffer = String::new();
+        let mut loc = Loc::new(filename);
         while let Some(c) = chars.next() {
             loc.inc(c);
             let token = match c {

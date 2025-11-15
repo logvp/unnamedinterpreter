@@ -79,7 +79,7 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
                 "REPL: \n> {:?}",
                 self.macros.get(words.next().unwrap())
             )?,
-            Some("PLAY") => self.play_macro(words.next().unwrap().to_string())?,
+            Some("PLAY") => self.play_macro(words.next().unwrap())?,
             Some("{") => self.start_buffering(),
             Some("}") => self.send_buffer()?,
             _ => writeln!(
@@ -101,8 +101,8 @@ impl<T: Interpreter, I: BufRead, O: Write> Repl<T, I, O> {
         self.macro_buffer.clear();
         self.name.clear();
     }
-    fn play_macro(&mut self, name: String) -> io::Result<()> {
-        let playback = self.macros.get(&name).unwrap();
+    fn play_macro(&mut self, name: &str) -> io::Result<()> {
+        let playback = self.macros.get(name).unwrap();
         let result = self.interpreter.interpret(playback, None);
         Self::print_results(&mut self.output, &result)?;
         Ok(())
