@@ -6,8 +6,8 @@ use crate::error::{Error, RuntimeError};
 use crate::interpreter::{Interpreter, RuntimeType};
 use crate::parser::Parser;
 
-use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
 use super::RuntimeValue;
+use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
 
 pub struct TreeWalkInterpreter {
     context: Rc<Context>,

@@ -174,7 +174,10 @@ impl Context {
     }
 
     pub(super) fn declare(&self, key: String, val: RuntimeValue, is_const: bool) {
-        let None = self.data.borrow_mut().insert(key, Variable { val, is_const })
+        let None = self
+            .data
+            .borrow_mut()
+            .insert(key, Variable { val, is_const })
         else {
             panic!("Cannot redeclare variable in same scope")
         };
