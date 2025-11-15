@@ -28,7 +28,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn new(start_index: usize, variables: &'a ResolutionTable) -> Self {
         BytecodeCompiler {
             start_index,
-            procedures: vec![Default::default()],
+            procedures: vec![Vec::default()],
             procedure_index: vec![0],
             variables,
             current_scope: 0,
@@ -79,7 +79,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn push_procedure(&mut self) -> usize {
         self.push_scope();
         let index = self.procedures.len();
-        self.procedures.push(Default::default());
+        self.procedures.push(Vec::new());
         self.procedure_index.push(index);
         index + self.start_index
     }

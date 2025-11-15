@@ -203,7 +203,7 @@ impl Resolver {
         Resolver {
             current_scope: 0,
             closure_boundary: 0,
-            scopes: Default::default(),
+            scopes: ResolutionTable::default(),
         }
     }
 
@@ -214,7 +214,7 @@ impl Resolver {
     fn push_scope(&mut self) {
         self.current_scope = self.scopes.make_scope(Scope {
             num_locals: 0,
-            data: Default::default(),
+            data: HashMap::default(),
             parent: self.current_scope,
         });
     }

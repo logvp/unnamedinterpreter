@@ -155,7 +155,7 @@ impl VirtualMachine {
     fn alloc_locals(&mut self, num: usize) {
         let _ = self.result.take();
         for _ in 0..num {
-            self.local.push(Default::default())
+            self.local.push(Value::None)
         }
     }
 
@@ -175,10 +175,10 @@ impl Interpreter for BytecodeInterpreter {
 
     fn new() -> Self {
         let mut interpreter = BytecodeInterpreter {
-            vm: Default::default(),
+            vm: VirtualMachine::default(),
             resolver: Resolver::new(),
-            call_stack: Default::default(),
-            procedures: Default::default(),
+            call_stack: Vec::default(),
+            procedures: Vec::default(),
         };
         interpreter.define_intrinsics();
         interpreter
