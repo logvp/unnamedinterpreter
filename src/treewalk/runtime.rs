@@ -188,11 +188,11 @@ impl Context {
             if self.is_const(&key).unwrap() {
                 Err(RuntimeError::ConstReassignment(key))
             } else {
-                let var = Variable {
+                let variable = Variable {
                     val,
                     is_const: false,
                 };
-                self.data.borrow_mut().insert(key, var);
+                self.data.borrow_mut().insert(key, variable);
                 Ok(())
             }
         } else if let Some(parent) = &self.parent {

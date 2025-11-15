@@ -29,7 +29,7 @@ pub const INTRINSICS: [IntrinsicFunction; 3] = [
 ];
 
 impl IntrinsicFunction {
-    pub(super) fn exec(&self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {
+    pub(super) fn exec(self, argc: usize, vm: &mut VirtualMachine) -> Result<(), Error> {
         match self {
             IntrinsicFunction::Print => {
                 for arg in vm

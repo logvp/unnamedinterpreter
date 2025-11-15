@@ -113,6 +113,7 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
+    #[expect(clippy::unnecessary_wraps)]
     pub fn name(&self) -> Option<Rc<str>> {
         match self {
             Self::Identifier(ident) => Some(ident.name.clone()),

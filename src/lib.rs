@@ -14,7 +14,12 @@
     clippy::uninlined_format_args,
     clippy::missing_errors_doc,
     clippy::match_same_arms,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::needless_continue
+)]
+// Temporary
+#![allow(
+    clippy::needless_pass_by_value
 )]
 
 mod ast;

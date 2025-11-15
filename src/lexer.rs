@@ -108,6 +108,7 @@ pub struct Lexer {
     end: Loc,
 }
 impl Lexer {
+    #[allow(clippy::too_many_lines)]
     pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexicalError> {
         fn build_buffer_while(
             buffer: &mut String,

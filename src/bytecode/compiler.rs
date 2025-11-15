@@ -37,7 +37,7 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     pub fn gen_bytecode(
-        ast: Ast,
+        ast: &Ast,
         start_index: usize,
         variables: &ResolutionTable,
     ) -> Result<ProgramChunk, Error> {
@@ -131,6 +131,8 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
+    // TODO: Ast visitor
+    #[expect(clippy::too_many_lines)]
     fn compile_expr(&mut self, expr: &Expression) -> Result<(), Error> {
         match expr {
             Expression::Binary(op, lhs, rhs) => {

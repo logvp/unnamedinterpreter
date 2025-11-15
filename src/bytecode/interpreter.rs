@@ -26,7 +26,7 @@ pub struct Environment {
 impl Environment {
     fn new(parent: Option<Rc<Environment>>) -> Self {
         Environment {
-            data: Default::default(),
+            data: Rc::default(),
             parent,
         }
     }
@@ -197,7 +197,7 @@ impl Interpreter for BytecodeInterpreter {
             return vec![Err(e)];
         }
         let program = match BytecodeCompiler::gen_bytecode(
-            ast,
+            &ast,
             self.procedures.len(),
             self.resolver.get_table(),
         ) {
