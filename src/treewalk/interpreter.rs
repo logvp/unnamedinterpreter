@@ -3,40 +3,31 @@ use std::rc::Rc;
 
 use crate::ast::*;
 use crate::error::{Error, RuntimeError};
+use crate::interpreter::{Interpreter, RuntimeType};
 use crate::parser::Parser;
 
 use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
-use super::{RuntimeType, RuntimeValue};
+use super::RuntimeValue;
 
-pub struct Interpreter {
+pub struct TreeWalkInterpreter {
     context: Rc<Context>,
 }
-impl Interpreter {
-    pub fn new() -> Self {
-        Interpreter {
+impl Interpreter for TreeWalkInterpreter {
+    type ReplReturn = RuntimeValue;
+
+    fn new() -> Self {
+        TreeWalkInterpreter {
             context: Rc::new(Context::init_global()),
         }
     }
-    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
-        node.eval(Rc::clone(&self.context))
-    }
-    pub fn interpret(
+
+    fn interpret(
         &mut self,
         text: &str,
         filename: Option<Rc<str>>,
     ) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret: Vec<Result<RuntimeValue, Error>> = Default::default();
-        let mut parser = {
-            match Parser::new(text, filename) {
-                Ok(parser) => parser,
-                Err(e) => {
-                    ret.push(Err(e));
-                    return ret;
-                }
-            }
-        };
-        let gen = parser.gen_ast();
-        match gen {
+        match Parser::gen_ast(text, filename) {
             Ok(ast) => {
                 for node in ast.iter() {
                     ret.push(self.interpret_node(node));
@@ -45,6 +36,11 @@ impl Interpreter {
             Err(e) => ret.push(Err(e)),
         }
         ret
+    }
+}
+impl TreeWalkInterpreter {
+    fn interpret_node(&mut self, node: &AstNode) -> Result<RuntimeValue, Error> {
+        node.eval(Rc::clone(&self.context))
     }
 }
 
@@ -67,18 +63,18 @@ impl Eval for Statement {
             Self::Declaration(lhs, rhs, is_const) => {
                 if !ctx.contains_in_scope(&lhs.name) {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.declare(lhs.name.to_owned(), value, *is_const);
+                    ctx.declare(lhs.name.to_string(), value, *is_const);
                 } else {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_owned()))?
+                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
                 }
             }
             Self::Assignment(lhs, rhs) => {
-                if ctx.contains(lhs.name().unwrap()) {
+                if ctx.contains(lhs.name().unwrap().as_ref()) {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.update(lhs.name().unwrap().to_owned(), value)?;
+                    ctx.update(lhs.name().unwrap().to_string(), value)?;
                 } else {
                     Err(RuntimeError::UnknownIdentifier(
-                        lhs.name().unwrap().to_owned(),
+                        lhs.name().unwrap().to_string(),
                     ))?
                 }
             }
@@ -219,7 +215,7 @@ fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<Runtim
                     }
                     // Bind arguments to parameter names
                     for (ident, val) in parameters.iter().zip(args.into_iter()) {
-                        scope.declare(ident.name.to_owned(), val, false);
+                        scope.declare(ident.name.to_string(), val, false);
                     }
 
                     body.eval(Rc::new(scope))
@@ -252,7 +248,7 @@ impl Eval for Literal {
     fn eval(&self, _: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Integer(int) => Ok(RuntimeValue::Integer(*int)),
-            Self::String(string) => Ok(RuntimeValue::String(string.to_owned())),
+            Self::String(string) => Ok(RuntimeValue::String(string.to_string())), // STRING_ALLOCATION
             Self::Boolean(boolean) => Ok(RuntimeValue::Boolean(*boolean)),
         }
     }
@@ -262,7 +258,7 @@ impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match ctx.get(&self.name) {
             Some(Variable { val, .. }) => Ok(val),
-            None => Err(RuntimeError::UnknownIdentifier(self.name.to_owned()).into()),
+            None => Err(RuntimeError::UnknownIdentifier(self.name.to_string()).into()),
         }
     }
 }

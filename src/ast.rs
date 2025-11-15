@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Debug, Clone, Copy)]
 pub enum Construct {
-    AstNode,
+    TopLevel,
     BlockScope,
     Statement,
     Var,
@@ -31,7 +31,7 @@ pub enum Construct {
 
 #[derive(Debug, Default)]
 pub struct Ast {
-    nodes: Vec<AstNode>,
+    pub nodes: Vec<AstNode>,
 }
 impl Deref for Ast {
     type Target = Vec<AstNode>;
@@ -113,23 +113,23 @@ pub enum Lvalue {
     Identifier(Identifier),
 }
 impl Lvalue {
-    pub fn name(&self) -> Option<&str> {
+    pub fn name(&self) -> Option<Rc<str>> {
         match self {
-            Self::Identifier(ident) => Some(&ident.name),
+            Self::Identifier(ident) => Some(ident.name.clone()),
             // _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Identifier {
-    pub name: String,
+    pub name: Rc<str>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(i32),
-    String(String),
+    String(Rc<str>),
     Boolean(bool),
 }
 
@@ -145,7 +145,7 @@ impl Display for Construct {
             f,
             "{}",
             match self {
-                Self::AstNode => "Ast Node",
+                Self::TopLevel => "Top Level Program",
                 Self::BlockScope => "Scoped Block",
                 Self::Statement => "Statement",
                 Self::Let => "Let Declaration",

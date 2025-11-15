@@ -1,9 +1,8 @@
-use crate::ast::Construct;
+use crate::ast::{BinaryOperator, Construct};
+use crate::interpreter::RuntimeType;
 use crate::lexer;
 use std::fmt::Display;
 use std::rc::Rc;
-
-pub use crate::interpreter::RuntimeType;
 
 #[derive(Debug, Clone)]
 pub struct Loc {
@@ -87,6 +86,8 @@ pub enum SyntaxError {
     ExpectedTokenIn(lexer::TokenKind, lexer::TokenKind, Construct, Loc),
     UnexpectedTokenIn(lexer::TokenKind, Construct, Loc),
     ExpressionMayOnlyComeAtEndIn(Construct, Loc),
+    AssignmentRequiresLvalue(Loc),
+    ParenthesisRequired(BinaryOperator, Construct, Loc),
 }
 
 #[derive(Debug)]
@@ -137,6 +138,15 @@ impl Display for SyntaxError {
             }
             Self::ExpressionMayOnlyComeAtEndIn(ort, loc) => {
                 write!(f, "{loc} Expression may only be in final position of {ort}")
+            }
+            Self::AssignmentRequiresLvalue(loc) => {
+                write!(
+                    f,
+                    "{loc} This expression does not resolve to a valid lvalue"
+                )
+            }
+            Self::ParenthesisRequired(op, _ort, loc) => {
+                write!(f, "{loc} Parenthesis are required around operator {op:?}",)
             }
         }
     }

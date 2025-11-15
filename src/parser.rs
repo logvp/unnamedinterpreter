@@ -12,20 +12,31 @@ pub struct Parser {
     loc: Loc,
 }
 impl Parser {
-    pub fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
+    fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
         Ok(Parser {
             lexer: Lexer::lex(text, filename.clone())?,
             loc: Loc::new(filename),
         })
     }
 
-    pub fn gen_ast(&mut self) -> Result<Ast, Error> {
-        let mut ast = Ast::default();
-        while !matches!(self.token(), TokenKind::Eof) {
+    pub fn gen_ast(text: &str, filename: Option<Rc<str>>) -> Result<Ast, Error> {
+        let mut parser = Parser::new(text, filename)?;
+        parser
+            .parse_ast_nodes(TokenKind::Eof, Construct::TopLevel)
+            .map(|x| Ast { nodes: x })
+    }
+
+    fn parse_ast_nodes(
+        &mut self,
+        delimiter: TokenKind,
+        ort: Construct,
+    ) -> Result<Vec<AstNode>, Error> {
+        let mut ast: Vec<AstNode> = Default::default();
+        while !delimiter.kind_eq(self.token()) {
             let node = self.parse_ast_node()?;
             match node {
                 AstNode::Statement(_) => ast.push(node),
-                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::Eof) => {
+                AstNode::Expression(expr) if !delimiter.kind_eq(self.token()) => {
                     self.expect_semicolon()?;
                     ast.push(AstNode::Statement(Statement::Expression(expr)))
                 }
@@ -36,13 +47,10 @@ impl Parser {
             }
         }
 
-        if let TokenKind::Eof = self.consume() {
+        if delimiter.kind_eq(&self.consume()) {
             Ok(ast)
         } else {
-            Err(
-                SyntaxError::ExpressionMayOnlyComeAtEndIn(Construct::AstNode, self.loc.clone())
-                    .into(),
-            )
+            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
         }
     }
 
@@ -51,80 +59,39 @@ impl Parser {
             TokenKind::Var => {
                 self.consume();
                 let identifier = self.parse_identifier(Construct::Var)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Declaration(
-                        identifier,
-                        self.parse_expression(Construct::Var)?,
-                        false,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Var,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                self.expect(TokenKind::Equal, Construct::Var)?;
+                Some(Statement::Declaration(
+                    identifier,
+                    self.parse_expression(Construct::Var)?,
+                    false,
+                ))
             }
             TokenKind::Let => {
                 self.consume();
                 let identifier = self.parse_identifier(Construct::Let)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Declaration(
-                        identifier,
-                        self.parse_expression(Construct::Let)?,
-                        true,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Var,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                self.expect(TokenKind::Equal, Construct::Let)?;
+                Some(Statement::Declaration(
+                    identifier,
+                    self.parse_expression(Construct::Let)?,
+                    true,
+                ))
             }
             TokenKind::Set => {
                 self.consume();
-                let lvalue = self.parse_lvalue(Construct::Set)?;
-                let equal = self.consume();
-                if let TokenKind::Equal = equal {
-                    Some(Statement::Assignment(
-                        lvalue,
-                        self.parse_expression(Construct::Set)?,
-                    ))
-                } else {
-                    return Err(SyntaxError::ExpectedTokenIn(
-                        TokenKind::Equal,
-                        equal,
-                        Construct::Set,
-                        self.loc.clone(),
-                    )
-                    .into());
-                }
+                let lvalue = self.parse_identifier(Construct::Set)?;
+                self.expect(TokenKind::Equal, Construct::Set)?;
+                Some(Statement::Assignment(
+                    Lvalue::Identifier(lvalue),
+                    self.parse_expression(Construct::Set)?,
+                ))
             }
             TokenKind::Identifier(_) if matches!(self.peek(), &TokenKind::ColonEqual) => {
                 let identifier = self.parse_identifier(Construct::SimpleDeclaration)?;
-                // consume `:=`
-                self.consume();
+                self.expect(TokenKind::ColonEqual, Construct::SimpleDeclaration)?;
                 Some(Statement::Declaration(
                     identifier,
                     self.parse_expression(Construct::SimpleDeclaration)?,
                     false,
-                ))
-            }
-            // TODO: Only checks for identifier not for Lvalue
-            TokenKind::Identifier(_) if matches!(self.peek(), TokenKind::Equal) => {
-                let lvalue = self.parse_lvalue(Construct::SimpleAssignment)?;
-                // consume `=`
-                self.consume();
-                Some(Statement::Assignment(
-                    lvalue,
-                    self.parse_expression(Construct::SimpleAssignment)?,
                 ))
             }
             _ => None,
@@ -132,141 +99,150 @@ impl Parser {
             self.expect_semicolon()?;
             return Ok(AstNode::Statement(statement));
         }
-        // Let, Set, SimpleDeclaration, SimpleAssignment cases are covered
-        // Statement::Expression and Expression need to be handled
+        // Let, Set, SimpleDeclaration cases are covered
+        // SimpleAssignment, Statement::Expression, Expression need to be handled
+        let expression_loc = self.loc.clone();
         let expression = self.parse_expression(Construct::Expression)?;
 
-        if let TokenKind::Semicolon = self.token() {
-            self.consume();
-            Ok(AstNode::Statement(Statement::Expression(expression)))
-        } else {
-            Ok(AstNode::Expression(expression))
+        match self.token() {
+            TokenKind::Equal => {
+                self.consume();
+                let lvalue = match expression {
+                    Expression::Variable(id) => Lvalue::Identifier(id),
+                    _ => return Err(SyntaxError::AssignmentRequiresLvalue(expression_loc).into()),
+                };
+                let rvalue = self.parse_expression(Construct::SimpleAssignment)?;
+                self.expect_semicolon()?;
+                Ok(AstNode::Statement(Statement::Assignment(lvalue, rvalue)))
+            }
+            TokenKind::Semicolon => {
+                self.consume();
+                Ok(AstNode::Statement(Statement::Expression(expression)))
+            }
+            _ => Ok(AstNode::Expression(expression)),
         }
     }
 
     fn parse_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
-        Ok(match self.token() {
-            TokenKind::If => self.parse_if_expression()?,
-            TokenKind::While => {
-                self.consume();
-                let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
-                let body = self.parse_braced_block(Construct::WhileBody)?;
-                Expression::While(Box::new(cond), body)
-            }
-            TokenKind::With => {
-                self.consume();
-                let object = self.parse_parenthetical_expression(Construct::With)?;
-                let body = self.parse_braced_block(Construct::With)?;
-                Expression::With(Box::new(object), body)
-            }
-            TokenKind::New => {
-                self.consume();
-                let body = self.parse_braced_block(Construct::NewBlock)?;
-                Expression::New(body)
-            }
-            _ => {
-                let lhs = self.parse_term(ort)?;
-                let op = match self.token() {
-                    TokenKind::Plus => BinaryOperator::Add,
-                    TokenKind::Minus => BinaryOperator::Subtract,
-                    TokenKind::EqualEqual => BinaryOperator::Equal,
-                    TokenKind::LessEqual => BinaryOperator::LessEqual,
-                    TokenKind::LeftAngle => BinaryOperator::LessThan,
-                    TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
-                    TokenKind::RightAngle => BinaryOperator::GreaterThan,
-                    TokenKind::SlashEqual => BinaryOperator::NotEqual,
-                    _ => return Ok(lhs),
-                };
-                self.consume();
-                Expression::Binary(op, Box::new(lhs), Box::new(self.parse_expression(ort)?))
-            }
-        })
+        self.parse_expression_rec(0, ort)
     }
 
-    fn parse_term(&mut self, ort: Construct) -> Result<Expression, Error> {
-        let lhs = self.parse_factor(ort)?;
-        let op = match self.token() {
+    // Expression parser based on https://github.com/matklad/minipratt
+    fn parse_expression_rec(&mut self, min_pow: u8, ort: Construct) -> Result<Expression, Error> {
+        let mut lhs = if let Some(prefix) = Self::convert_prefix_operator(self.token()) {
+            self.consume();
+            let r_pow = Self::prefix_power(prefix);
+            let rhs = self.parse_expression_rec(r_pow, ort)?;
+            Expression::Unary(prefix, Box::new(rhs))
+        } else {
+            match self.token() {
+                TokenKind::Literal(_) => {
+                    let TokenKind::Literal(x) = self.consume() else {unreachable!() };
+                    Expression::Literal(x)
+                }
+                TokenKind::Identifier(_) => Expression::Variable(self.parse_identifier(ort)?),
+                TokenKind::LeftParen => self.parse_parenthetical_expression(ort)?,
+                TokenKind::If => self.parse_if_expression()?,
+                TokenKind::While => self.parse_while_expression()?,
+                TokenKind::With => self.parse_with_expression()?,
+                TokenKind::New => self.parse_new_expression()?,
+                TokenKind::Lambda => self.parse_lambda_expression()?,
+                TokenKind::LeftBrace => {
+                    Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
+                }
+                _ => {
+                    return Err(SyntaxError::UnexpectedTokenIn(
+                        self.consume(),
+                        ort,
+                        self.loc.clone(),
+                    )
+                    .into())
+                }
+            }
+        };
+
+        loop {
+            if let TokenKind::LeftParen = self.token() {
+                let args = self.parse_function_args()?;
+                lhs = Expression::FunctionCall(Box::new(lhs), args);
+                continue;
+            }
+
+            let Some(op) = Self::convert_infix_operator(self.token()) else { break; };
+
+            let (l_pow, r_pow) = Self::infix_power(op);
+            if l_pow == min_pow {
+                return Err(SyntaxError::ParenthesisRequired(op, ort, self.loc.clone()).into());
+            }
+            if l_pow < min_pow {
+                break;
+            }
+
+            self.consume(); // chomp op
+            let rhs = self.parse_expression_rec(r_pow, ort)?;
+            lhs = Expression::Binary(op, Box::new(lhs), Box::new(rhs));
+        }
+
+        Ok(lhs)
+    }
+
+    // Higher number = higher precedence
+    // Equal left and right precedence means parenthesis are required
+    fn infix_power(op: BinaryOperator) -> (u8, u8) {
+        match op {
+            BinaryOperator::Add | BinaryOperator::Subtract => (5, 6),
+            BinaryOperator::Multiply | BinaryOperator::Divide => (9, 10),
+            BinaryOperator::Equal
+            | BinaryOperator::NotEqual
+            | BinaryOperator::GreaterEqual
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::LessEqual
+            | BinaryOperator::LessThan => (3, 3),
+            BinaryOperator::Concatenate => (5, 6),
+        }
+    }
+
+    fn prefix_power(op: UnaryOperator) -> u8 {
+        match op {
+            UnaryOperator::Negate => 15,
+        }
+    }
+
+    fn convert_infix_operator(token: &TokenKind) -> Option<BinaryOperator> {
+        Some(match token {
+            TokenKind::RightAngle => BinaryOperator::GreaterThan,
+            TokenKind::LeftAngle => BinaryOperator::LessThan,
+            TokenKind::GreaterEqual => BinaryOperator::GreaterEqual,
+            TokenKind::LessEqual => BinaryOperator::LessEqual,
+            TokenKind::EqualEqual => BinaryOperator::Equal,
+            TokenKind::SlashEqual => BinaryOperator::NotEqual,
+            TokenKind::Plus => BinaryOperator::Add,
+            TokenKind::Minus => BinaryOperator::Subtract,
             TokenKind::Star => BinaryOperator::Multiply,
             TokenKind::Slash => BinaryOperator::Divide,
             TokenKind::PlusPlus => BinaryOperator::Concatenate,
-            _ => return Ok(lhs),
-        };
-
-        self.consume();
-        Ok(Expression::Binary(
-            op,
-            Box::new(lhs),
-            Box::new(self.parse_term(ort)?),
-        ))
+            _ => return None,
+        })
     }
 
-    fn parse_factor(&mut self, ort: Construct) -> Result<Expression, Error> {
-        let factor = match self.token() {
-            TokenKind::Lambda => self.parse_lambda_expression()?,
-            TokenKind::LeftParen => self.parse_parenthetical_expression(Construct::Expression)?,
-
-            TokenKind::LeftBrace => {
-                Expression::Block(self.parse_braced_block(Construct::BlockScope)?)
-            }
-            TokenKind::Minus => {
-                self.consume();
-                Expression::Unary(UnaryOperator::Negate, Box::new(self.parse_factor(ort)?))
-            }
-            TokenKind::Literal(literal) => {
-                let literal = literal.to_owned();
-                self.consume();
-                Expression::Literal(literal)
-            }
-            TokenKind::Identifier(name) => {
-                let name = name.to_owned();
-                self.consume();
-                Expression::Variable(Identifier { name })
-            }
-            _ => {
-                let tok = self.consume();
-                return Err(SyntaxError::UnexpectedTokenIn(tok, ort, self.loc.clone()).into());
-            }
-        };
-        if let TokenKind::LeftParen = self.token() {
-            self.parse_function_call(factor)
-        } else {
-            Ok(factor)
-        }
+    fn convert_prefix_operator(token: &TokenKind) -> Option<UnaryOperator> {
+        Some(match token {
+            TokenKind::Minus => UnaryOperator::Negate,
+            _ => return None,
+        })
     }
 
     fn parse_parenthetical_expression(&mut self, ort: Construct) -> Result<Expression, Error> {
         self.expect(TokenKind::LeftParen, ort)?;
-
         let parenthesized = self.parse_expression(ort)?;
-
         self.expect(TokenKind::RightParen, ort)?;
-
         Ok(parenthesized)
     }
 
     fn parse_braced_block(&mut self, ort: Construct) -> Result<Block, Error> {
         self.expect(TokenKind::LeftBrace, ort)?;
-        let mut block: Vec<AstNode> = Default::default();
-        while !matches!(self.token(), TokenKind::RightBrace) {
-            let node = self.parse_ast_node()?;
-            match node {
-                AstNode::Statement(_) => block.push(node),
-                AstNode::Expression(expr) if !matches!(self.token(), TokenKind::RightBrace) => {
-                    self.expect_semicolon()?;
-                    block.push(AstNode::Statement(Statement::Expression(expr)))
-                }
-                AstNode::Expression(_) => {
-                    block.push(node);
-                    break;
-                }
-            }
-        }
-
-        if let TokenKind::RightBrace = self.consume() {
-            Ok(Block(block.into()))
-        } else {
-            Err(SyntaxError::ExpressionMayOnlyComeAtEndIn(ort, self.loc.clone()).into())
-        }
+        let block = self.parse_ast_nodes(TokenKind::RightBrace, ort)?;
+        Ok(Block(Rc::from(block)))
     }
 
     fn parse_if_expression(&mut self) -> Result<Expression, Error> {
@@ -292,11 +268,31 @@ impl Parser {
         Ok(Expression::IfElse(Box::new(cond), body, else_))
     }
 
+    fn parse_while_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::While, Construct::WhileCondition)?;
+        let cond = self.parse_parenthetical_expression(Construct::WhileCondition)?;
+        let body = self.parse_braced_block(Construct::WhileBody)?;
+        Ok(Expression::While(Box::new(cond), body))
+    }
+
+    fn parse_with_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::With, Construct::With)?;
+        let object = self.parse_parenthetical_expression(Construct::With)?;
+        let body = self.parse_braced_block(Construct::With)?;
+        Ok(Expression::With(Box::new(object), body))
+    }
+
+    fn parse_new_expression(&mut self) -> Result<Expression, Error> {
+        self.expect(TokenKind::New, Construct::NewBlock)?;
+        let body = self.parse_braced_block(Construct::NewBlock)?;
+        Ok(Expression::New(body))
+    }
+
     fn parse_lambda_expression(&mut self) -> Result<Expression, Error> {
         self.expect(TokenKind::Lambda, Construct::Lambda)?;
         let params = self.parse_lambda_params()?;
         let body = self.parse_braced_block(Construct::LambdaBody)?;
-        Ok(Expression::Lambda(params.into(), body))
+        Ok(Expression::Lambda(Rc::from(params), body))
     }
 
     fn parse_lambda_params(&mut self) -> Result<Vec<Identifier>, Error> {
@@ -315,15 +311,6 @@ impl Parser {
         Ok(params)
     }
 
-    fn parse_function_call(&mut self, func: Expression) -> Result<Expression, Error> {
-        let call = Expression::FunctionCall(Box::new(func), self.parse_function_args()?);
-        if let TokenKind::LeftParen = self.token() {
-            self.parse_function_call(call)
-        } else {
-            Ok(call)
-        }
-    }
-
     fn parse_function_args(&mut self) -> Result<Rc<[Expression]>, Error> {
         const ORT: Construct = Construct::FunctionCall;
         self.expect(TokenKind::LeftParen, ORT)?;
@@ -337,11 +324,7 @@ impl Parser {
             }
         }
         self.expect(TokenKind::RightParen, ORT)?;
-        Ok(args.into())
-    }
-
-    fn parse_lvalue(&mut self, ort: Construct) -> Result<Lvalue, Error> {
-        Ok(Lvalue::Identifier(self.parse_identifier(ort)?))
+        Ok(Rc::from(args))
     }
 
     fn parse_identifier(&mut self, ort: Construct) -> Result<Identifier, Error> {
@@ -350,7 +333,7 @@ impl Parser {
             Ok(Identifier { name })
         } else {
             Err(SyntaxError::ExpectedTokenIn(
-                TokenKind::Identifier(String::new()),
+                TokenKind::Identifier(Rc::from(String::new())),
                 ident,
                 ort,
                 self.loc.clone(),

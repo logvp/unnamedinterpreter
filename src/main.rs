@@ -1,19 +1,27 @@
 mod ast;
+mod bytecode;
 mod error;
 mod interpreter;
 mod lexer;
 mod parser;
 mod repl;
+mod treewalk;
 
 use std::{env, io};
+
+use bytecode::interpreter::BytecodeInterpreter;
+#[cfg(test)]
+use interpreter::Interpreter;
+
+type InterpreterImpl = BytecodeInterpreter;
 
 fn main() -> io::Result<()> {
     let filename = env::args().nth(1);
 
     if let Some(path) = filename {
-        repl::run_and_print_file(&path)
+        repl::run_and_print_file::<InterpreterImpl, _>(&path)
     } else {
-        repl::init()
+        repl::init::<InterpreterImpl>()
     }
 }
 
@@ -43,13 +51,12 @@ fn lexer() {
 
 #[test]
 fn parser() {
-    let mut parser = parser::Parser::new(PROGRAM, None).unwrap();
-    let _ = parser.gen_ast().unwrap();
+    let _ = parser::Parser::gen_ast(PROGRAM, None).unwrap();
 }
 
 #[test]
 fn interpreter() {
-    for result in interpreter::Interpreter::new().interpret(PROGRAM, None) {
+    for result in InterpreterImpl::new().interpret(PROGRAM, None) {
         result.unwrap();
     }
 }
@@ -59,7 +66,7 @@ fn examples() {
     use std::fs;
 
     for file in fs::read_dir("./examples").unwrap() {
-        for result in repl::run_file(&file.unwrap().path()).unwrap() {
+        for result in repl::run_file::<InterpreterImpl, _>(&file.unwrap().path()).unwrap() {
             result.unwrap();
         }
     }
@@ -71,7 +78,9 @@ fn should_error() {
 
     for path in ["./err/lexical", "./err/runtime"] {
         'file_loop: for file in fs::read_dir(path).unwrap() {
-            for result in repl::run_file(&file.as_ref().unwrap().path()).unwrap() {
+            for result in
+                repl::run_file::<InterpreterImpl, _>(&file.as_ref().unwrap().path()).unwrap()
+            {
                 if result.is_err() {
                     break 'file_loop;
                 }
