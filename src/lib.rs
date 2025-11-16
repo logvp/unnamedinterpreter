@@ -18,9 +18,7 @@
     clippy::needless_continue
 )]
 // Temporary
-#![allow(
-    clippy::needless_pass_by_value
-)]
+#![allow(clippy::needless_pass_by_value)]
 
 mod ast;
 pub mod bytecode;

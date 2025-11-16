@@ -276,7 +276,7 @@ impl Lexer {
                         &mut chars,
                         |c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'),
                     );
-                    
+
                     match buffer.as_str() {
                         "true" => TokenKind::Literal(Literal::Boolean(true)),
                         "false" => TokenKind::Literal(Literal::Boolean(false)),

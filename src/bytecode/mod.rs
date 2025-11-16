@@ -1,6 +1,7 @@
- mod compiler;
- mod instruction;
+
+mod compiler;
+mod instruction;
 pub mod interpreter;
- mod intrinsics;
- mod resolver;
- mod value;
+mod intrinsics;
+mod resolver;
+mod value;

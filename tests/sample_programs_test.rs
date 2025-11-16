@@ -1,5 +1,5 @@
-use unnamedinterpreter::{self as ui, bytecode, treewalk};
 use ui::interpreter::Interpreter;
+use unnamedinterpreter::{self as ui, bytecode, treewalk};
 
 const PROGRAM: &str = r#"
 var x = 15;
@@ -69,9 +69,7 @@ fn should_error<I: Interpreter>() {
 
     for path in ["./err/lexical", "./err/runtime"] {
         'file_loop: for file in fs::read_dir(path).unwrap() {
-            for result in
-                ui::repl::run_file::<I, _>(&file.as_ref().unwrap().path()).unwrap()
-            {
+            for result in ui::repl::run_file::<I, _>(&file.as_ref().unwrap().path()).unwrap() {
                 if result.is_err() {
                     break 'file_loop;
                 }

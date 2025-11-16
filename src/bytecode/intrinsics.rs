@@ -47,7 +47,7 @@ impl IntrinsicFunction {
             }
             IntrinsicFunction::TypeOf => {
                 if argc != 1 {
-                    return Err(RuntimeError::ExpectedArgumentsFound(1, argc).into())
+                    return Err(RuntimeError::ExpectedArgumentsFound(1, argc).into());
                 }
                 vm.result.set(Value::String(Rc::from(format!(
                     "{}",
