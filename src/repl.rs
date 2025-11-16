@@ -4,7 +4,6 @@ use crate::symbol::sym;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};
-use std::rc::Rc;
 
 pub struct Repl<T: Interpreter, I: BufRead, O: Write> {
     interpreter: T,

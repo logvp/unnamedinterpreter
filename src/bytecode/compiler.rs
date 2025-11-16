@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
     error::Error,

@@ -1,5 +1,5 @@
 use crate::symbol::{Symbol, sym};
-use std::{collections::VecDeque, fmt::Display, iter::Peekable, rc::Rc};
+use std::{collections::VecDeque, fmt::Display, iter::Peekable};
 
 pub use crate::ast::Literal;
 use crate::error::{LexicalError, Loc};
