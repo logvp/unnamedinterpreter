@@ -24,7 +24,7 @@ pub enum Value {
     // Object(), TODO
     Function(FunctionObject),
     Integer(i32),
-    String(Rc<str>),
+    String(String),
     Boolean(bool),
     #[default]
     None,
@@ -60,9 +60,9 @@ impl Value {
         }
     }
 
-    pub fn string(&self) -> Result<Rc<str>, RuntimeError> {
+    pub fn string(&self) -> Result<String, RuntimeError> {
         match self {
-            Value::String(x) => Ok(x.clone()),
+            Value::String(x) => Ok(x.to_owned()),
             x => Err(RuntimeError::ExpectedButFound(
                 RuntimeType::String,
                 x.type_of(),
@@ -93,7 +93,7 @@ impl Value {
             Op::Subtract => Value::Integer(a.integer()? - b.integer()?),
             Op::Multiply => Value::Integer(a.integer()? * b.integer()?),
             Op::Divide => Value::Integer(a.integer()? / b.integer()?),
-            Op::Concatenate => Value::String(Rc::from(format!("{}{}", a.string()?, b.string()?))), // STRING_ALLOCATION
+            Op::Concatenate => Value::String(format!("{}{}", a.string()?, b.string()?)), // STRING_ALLOCATION
         })
     }
 
@@ -147,7 +147,7 @@ impl From<Literal> for Value {
         match value {
             Literal::Boolean(x) => Value::Boolean(x),
             Literal::Integer(x) => Value::Integer(x),
-            Literal::String(x) => Value::String(x),
+            Literal::String(x) => Value::String(x.to_string()),
         }
     }
 }
@@ -156,7 +156,7 @@ impl From<&Literal> for Value {
         match value {
             Literal::Boolean(x) => Value::Boolean(*x),
             Literal::Integer(x) => Value::Integer(*x),
-            Literal::String(x) => Value::String(Rc::clone(x)),
+            Literal::String(x) => Value::String(x.to_string()),
         }
     }
 }

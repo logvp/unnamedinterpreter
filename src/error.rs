@@ -1,14 +1,14 @@
 use crate::ast::{BinaryOperator, Construct};
 use crate::interpreter::RuntimeType;
 use crate::lexer;
+use crate::symbol::Symbol;
 use std::fmt::Display;
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Loc {
     pub line: usize,
     pub col: usize,
-    pub filename: Option<Rc<str>>,
+    pub filename: Option<Symbol>,
 }
 impl Display for Loc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,7 +19,7 @@ impl Display for Loc {
     }
 }
 impl Loc {
-    pub fn new(filename: Option<Rc<str>>) -> Self {
+    pub fn new(filename: Option<Symbol>) -> Self {
         Loc {
             line: 1,
             col: 1,
@@ -73,12 +73,12 @@ impl Display for Error {
 
 #[derive(Debug)]
 pub enum LexicalError {
-    UnknownToken(String, Loc),
-    UnterminatedStringLiteral(String, Loc),
+    UnknownToken(Symbol, Loc),
+    UnterminatedStringLiteral(Symbol, Loc),
     UnmatchedMultilineComment(Loc),
     InvalidEscape(char, Loc),
-    BadHexLiteral(String, Loc),
-    BadBinLiteral(String, Loc),
+    BadHexLiteral(Symbol, Loc),
+    BadBinLiteral(Symbol, Loc),
 }
 
 #[derive(Debug)]
@@ -94,9 +94,9 @@ pub enum SyntaxError {
 pub enum RuntimeError {
     ExpectedButFound(RuntimeType, RuntimeType),
     ExpectedArgumentsFound(usize, usize),
-    VariableRedeclaration(String),
-    ConstReassignment(String),
-    UnknownIdentifier(String),
+    VariableRedeclaration(Symbol),
+    ConstReassignment(Symbol),
+    UnknownIdentifier(Symbol),
 }
 
 impl Display for LexicalError {

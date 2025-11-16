@@ -1,8 +1,7 @@
-use std::rc::Rc;
-
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
     error::Error,
+    symbol::Symbol,
 };
 
 use super::{
@@ -51,11 +50,11 @@ impl<'a> BytecodeCompiler<'a> {
         })
     }
 
-    fn resolve(&self, name: Rc<str>) -> Source {
+    fn resolve(&self, name: Symbol) -> Source {
         let mut parent_depth = 0;
         let mut scope = self.current_scope;
         while scope > 0 {
-            match self.variables.lookup_local_in_scope(&name, scope) {
+            match self.variables.lookup_local_in_scope(name, scope) {
                 Some(LocalVariable::Local { index, .. }) => {
                     return Source::Local(index.unwrap() + parent_depth);
                 }
@@ -119,7 +118,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.push_instruction(Instruction::Store { dest });
             }
             Statement::Declaration(ident, expr, _) => {
-                let dest = self.resolve(Rc::clone(&ident.name));
+                let dest = self.resolve(ident.name);
                 self.compile_expr(expr)?;
                 self.push_instruction(Instruction::Store { dest });
             }
@@ -138,7 +137,7 @@ impl<'a> BytecodeCompiler<'a> {
             Expression::Binary(op, lhs, rhs) => {
                 let mut src0 = match lhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
-                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)),
+                    Expression::Variable(ident) => self.resolve(ident.name),
                     expr => {
                         self.compile_expr(expr)?;
                         Source::Result
@@ -146,7 +145,7 @@ impl<'a> BytecodeCompiler<'a> {
                 };
                 let src1 = match rhs.as_ref() {
                     Expression::Literal(literal) => Source::Immediate(Value::from(literal)),
-                    Expression::Variable(ident) => self.resolve(Rc::clone(&ident.name)),
+                    Expression::Variable(ident) => self.resolve(ident.name),
                     expr => {
                         // save lhs
                         if !matches!(src0, Source::Result) {
@@ -182,7 +181,7 @@ impl<'a> BytecodeCompiler<'a> {
                 Ok(())
             }
             Expression::Variable(ident) => {
-                let src = self.resolve(Rc::clone(&ident.name));
+                let src = self.resolve(ident.name);
                 self.push_instruction(Instruction::Nullary { src });
                 Ok(())
             }
@@ -253,12 +252,12 @@ impl<'a> BytecodeCompiler<'a> {
                     locals: parameters.len(),
                 });
                 for param in parameters.iter() {
-                    self.resolve(Rc::clone(&param.name));
+                    self.resolve(param.name);
                 }
                 for param in parameters.iter().rev() {
                     self.push_instruction(Instruction::Nullary { src: Source::Stack });
                     self.push_instruction(Instruction::Store {
-                        dest: self.resolve(Rc::clone(&param.name)),
+                        dest: self.resolve(param.name),
                     })
                 }
                 self.compile_block(body)?;
