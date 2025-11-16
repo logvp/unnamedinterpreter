@@ -15,7 +15,7 @@ pub struct Parser {
 impl Parser {
     fn new(text: &str, filename: Option<Symbol>) -> Result<Self, Error> {
         Ok(Parser {
-            lexer: Lexer::lex(text, filename.clone())?,
+            lexer: Lexer::lex(text, filename)?,
             loc: Loc::new(filename),
         })
     }

@@ -118,7 +118,7 @@ impl Lvalue {
     #[expect(clippy::unnecessary_wraps)]
     pub fn name(&self) -> Option<Symbol> {
         match self {
-            Self::Identifier(ident) => Some(ident.name.clone()),
+            Self::Identifier(ident) => Some(ident.name),
             // _ => None,
         }
     }

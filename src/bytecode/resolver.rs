@@ -59,7 +59,7 @@ impl ResolutionTable {
             scope
                 .data
                 .insert(
-                    ident.clone(),
+                    ident,
                     LocalVariable::Local {
                         is_const,
                         index: None,
@@ -68,7 +68,7 @@ impl ResolutionTable {
                 .is_some()
         } else {
             match self.global_scope.insert(
-                ident.clone(),
+                ident,
                 if is_const {
                     GlobalVariable::Constant
                 } else {
@@ -327,7 +327,7 @@ impl Resolver {
                 for param in parameters.iter() {
                     // parameters are mutable by default
                     self.scopes
-                        .make_declaration(self.current_scope, param.name.clone(), false)?;
+                        .make_declaration(self.current_scope, param.name, false)?;
                 }
                 let saved_closure_boundary = self.closure_boundary;
                 self.closure_boundary = self.current_scope;
