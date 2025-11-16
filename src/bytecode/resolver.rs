@@ -2,7 +2,8 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     ast::{Ast, AstNode, Block, Expression, Statement},
-    error::{Error, RuntimeError}, symbol::Symbol,
+    error::{Error, RuntimeError},
+    symbol::Symbol,
 };
 
 #[derive(Clone, Copy)]
@@ -128,10 +129,7 @@ impl ResolutionTable {
     fn found_unknown_variable(&mut self, ident: Symbol, in_a_closure: bool) -> Result<(), Error> {
         if in_a_closure {
             // it could be a global that has not been defined yet, but will be before this closure is called
-            match self
-                .global_scope
-                .insert(ident, GlobalVariable::Unknown)
-            {
+            match self.global_scope.insert(ident, GlobalVariable::Unknown) {
                 Some(GlobalVariable::Unknown) | None => Ok(()),
                 Some(x) => panic!("Attempted to overwrite {:?} {ident} with Unknown", x),
             }
@@ -232,9 +230,7 @@ impl Resolver {
 
     pub fn define_globals(&mut self, identifiers: &[Symbol]) {
         for ident in identifiers {
-            self.scopes
-                .make_declaration(0, *ident, false)
-                .unwrap()
+            self.scopes.make_declaration(0, *ident, false).unwrap()
         }
     }
 
@@ -269,11 +265,8 @@ impl Resolver {
                 self.resolve_expr(expr)?;
             }
             Statement::Declaration(ident, expr, is_const) => {
-                self.scopes.make_declaration(
-                    self.current_scope,
-                    ident.name,
-                    *is_const,
-                )?;
+                self.scopes
+                    .make_declaration(self.current_scope, ident.name, *is_const)?;
                 self.resolve_expr(expr)?;
             }
             Statement::Expression(expr) => {

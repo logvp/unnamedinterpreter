@@ -74,9 +74,7 @@ impl Eval for Statement {
                     let value = rhs.eval(Rc::clone(&ctx))?;
                     ctx.update(lhs.name().unwrap(), value)?;
                 } else {
-                    Err(RuntimeError::UnknownIdentifier(
-                        lhs.name().unwrap(),
-                    ))?
+                    Err(RuntimeError::UnknownIdentifier(lhs.name().unwrap()))?
                 }
             }
             Self::Expression(expr) => {

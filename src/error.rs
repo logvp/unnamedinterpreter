@@ -1,8 +1,8 @@
 use crate::ast::{BinaryOperator, Construct};
 use crate::interpreter::RuntimeType;
 use crate::lexer;
-use std::fmt::Display;
 use crate::symbol::Symbol;
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub struct Loc {

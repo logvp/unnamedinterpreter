@@ -4,7 +4,7 @@ use crate::{
     ast::{BinaryOperator, UnaryOperator},
     error::RuntimeError,
     interpreter::RuntimeType,
-    lexer::Literal
+    lexer::Literal,
 };
 
 use super::{interpreter::Environment, intrinsics::IntrinsicFunction};

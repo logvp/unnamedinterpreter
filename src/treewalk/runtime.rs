@@ -8,7 +8,8 @@ use std::{
 use crate::{
     ast::{Block, Identifier},
     error::RuntimeError,
-    interpreter::RuntimeType, symbol::{Symbol, sym},
+    interpreter::RuntimeType,
+    symbol::{Symbol, sym},
 };
 
 use super::instrinsics::IntrinsicFunction;

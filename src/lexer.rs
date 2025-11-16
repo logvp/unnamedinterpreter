@@ -170,7 +170,9 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0x10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexicalError::BadHexLiteral(sym(buffer.as_str()), loc)),
+                        Err(_) => {
+                            return Err(LexicalError::BadHexLiteral(sym(buffer.as_str()), loc));
+                        }
                     }
                 }
                 '0' if next_if_eq(&mut chars, 'b', &mut loc) => {
@@ -179,7 +181,9 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0b10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexicalError::BadBinLiteral(sym(buffer.as_str()), loc)),
+                        Err(_) => {
+                            return Err(LexicalError::BadBinLiteral(sym(buffer.as_str()), loc));
+                        }
                     }
                 }
                 '0'..='9' => {
@@ -240,7 +244,10 @@ impl Lexer {
 
                         TokenKind::Literal(Literal::String(sym(buffer.as_str())))
                     } else {
-                        return Err(LexicalError::UnterminatedStringLiteral(sym(buffer.as_str()), loc));
+                        return Err(LexicalError::UnterminatedStringLiteral(
+                            sym(buffer.as_str()),
+                            loc,
+                        ));
                     }
                 }
                 '<' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::LessEqual,

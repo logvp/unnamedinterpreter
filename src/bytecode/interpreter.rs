@@ -7,7 +7,8 @@ use std::{
 use crate::{
     error::{Error, RuntimeError},
     interpreter::Interpreter,
-    parser::Parser, symbol::{Symbol, sym},
+    parser::Parser,
+    symbol::{Symbol, sym},
 };
 
 use super::{
@@ -45,10 +46,7 @@ impl Environment {
     }
 
     fn set(&self, key: Symbol, value: Value) {
-        self.data
-            .as_ref()
-            .borrow_mut()
-            .insert(key, value);
+        self.data.as_ref().borrow_mut().insert(key, value);
     }
 }
 
@@ -218,11 +216,8 @@ impl BytecodeInterpreter {
                     Value::Function(FunctionObject::Intrinsic(intrinsic)),
                 )
             }));
-        self.resolver.define_globals(
-            &intrinsics::INTRINSICS
-                .map(intrinsics::get_name)
-                .map(sym)
-        );
+        self.resolver
+            .define_globals(&intrinsics::INTRINSICS.map(intrinsics::get_name).map(sym));
     }
 
     pub fn run_program(
