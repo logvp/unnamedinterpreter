@@ -8,7 +8,7 @@ use std::{
 use crate::{
     ast::{Block, Identifier},
     error::RuntimeError,
-    interpreter::RuntimeType,
+    interpreter::RuntimeType, symbol::{Symbol, sym},
 };
 
 use super::instrinsics::IntrinsicFunction;
@@ -121,7 +121,7 @@ pub(super) struct Variable {
 
 #[derive(Clone)]
 pub(super) struct Context {
-    data: RefCell<HashMap<String, Variable>>,
+    data: RefCell<HashMap<Symbol, Variable>>,
     parent: Option<Rc<Self>>,
 }
 impl Context {
@@ -131,17 +131,17 @@ impl Context {
             parent: None,
         };
         global.declare(
-            "print".to_string(),
+            sym("print"),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Print))),
             true,
         );
         global.declare(
-            "typeof".to_string(),
+            sym("typeof"),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::TypeOf))),
             true,
         );
         global.declare(
-            "debug".to_string(),
+            sym("debug"),
             RuntimeValue::Function(Rc::new(FunctionType::Intrinsic(IntrinsicFunction::Debug))),
             true,
         );
@@ -149,9 +149,9 @@ impl Context {
         global
     }
 
-    pub(super) fn is_const(&self, key: &str) -> Option<bool> {
-        if self.data.borrow().contains_key(key) {
-            Some(self.data.borrow().get(key).unwrap().is_const)
+    pub(super) fn is_const(&self, key: Symbol) -> Option<bool> {
+        if self.data.borrow().contains_key(&key) {
+            Some(self.data.borrow().get(&key).unwrap().is_const)
         } else if let Some(parent) = &self.parent {
             parent.is_const(key)
         } else {
@@ -159,8 +159,8 @@ impl Context {
         }
     }
 
-    pub(super) fn contains(&self, key: &str) -> bool {
-        if self.data.borrow().contains_key(key) {
+    pub(super) fn contains(&self, key: Symbol) -> bool {
+        if self.data.borrow().contains_key(&key) {
             true
         } else if let Some(parent) = &self.parent {
             parent.contains(key)
@@ -169,11 +169,11 @@ impl Context {
         }
     }
 
-    pub(super) fn contains_in_scope(&self, key: &str) -> bool {
-        self.data.borrow().contains_key(key)
+    pub(super) fn contains_in_scope(&self, key: Symbol) -> bool {
+        self.data.borrow().contains_key(&key)
     }
 
-    pub(super) fn declare(&self, key: String, val: RuntimeValue, is_const: bool) {
+    pub(super) fn declare(&self, key: Symbol, val: RuntimeValue, is_const: bool) {
         let None = self
             .data
             .borrow_mut()
@@ -183,9 +183,9 @@ impl Context {
         };
     }
 
-    pub(super) fn update(&self, key: String, val: RuntimeValue) -> Result<(), RuntimeError> {
-        if self.contains_in_scope(&key) {
-            if self.is_const(&key).unwrap() {
+    pub(super) fn update(&self, key: Symbol, val: RuntimeValue) -> Result<(), RuntimeError> {
+        if self.contains_in_scope(key) {
+            if self.is_const(key).unwrap() {
                 Err(RuntimeError::ConstReassignment(key))
             } else {
                 let variable = Variable {
@@ -202,10 +202,10 @@ impl Context {
         }
     }
 
-    pub(super) fn get(&self, key: &str) -> Option<Variable> {
+    pub(super) fn get(&self, key: Symbol) -> Option<Variable> {
         self.data
             .borrow()
-            .get(key)
+            .get(&key)
             .cloned()
             .or(self.parent.as_ref().and_then(|p| p.get(key)))
     }

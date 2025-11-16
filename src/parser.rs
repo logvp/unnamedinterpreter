@@ -6,20 +6,21 @@ use crate::ast::{
 };
 use crate::error::{Error, Loc, SyntaxError};
 use crate::lexer::{Lexer, Token, TokenKind};
+use crate::symbol::{Symbol, sym};
 
 pub struct Parser {
     lexer: Lexer,
     loc: Loc,
 }
 impl Parser {
-    fn new(text: &str, filename: Option<Rc<str>>) -> Result<Self, Error> {
+    fn new(text: &str, filename: Option<Symbol>) -> Result<Self, Error> {
         Ok(Parser {
             lexer: Lexer::lex(text, filename.clone())?,
             loc: Loc::new(filename),
         })
     }
 
-    pub fn gen_ast(text: &str, filename: Option<Rc<str>>) -> Result<Ast, Error> {
+    pub fn gen_ast(text: &str, filename: Option<Symbol>) -> Result<Ast, Error> {
         let mut parser = Parser::new(text, filename)?;
         parser
             .parse_ast_nodes(&TokenKind::Eof, Construct::TopLevel)
@@ -337,7 +338,7 @@ impl Parser {
             Ok(Identifier { name })
         } else {
             Err(SyntaxError::ExpectedTokenIn(
-                TokenKind::Identifier(Rc::from(String::new())),
+                TokenKind::Identifier(sym("")),
                 ident,
                 ort,
                 self.loc.clone(),

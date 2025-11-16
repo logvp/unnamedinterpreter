@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::error::Error;
+use crate::{error::Error, symbol::Symbol};
 
 pub trait Interpreter {
     type ReplReturn: Display;
@@ -10,7 +10,7 @@ pub trait Interpreter {
     fn interpret(
         &mut self,
         text: &str,
-        filename: Option<Rc<str>>,
+        filename: Option<Symbol>,
     ) -> Vec<Result<Self::ReplReturn, Error>>;
 }
 

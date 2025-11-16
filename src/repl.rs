@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::interpreter::Interpreter;
+use crate::symbol::sym;
 use std::collections::HashMap;
 use std::io;
 use std::io::{BufRead, Write};
@@ -170,7 +171,7 @@ pub fn run_file<T: Interpreter, P: AsRef<std::path::Path>>(
     path: &P,
 ) -> io::Result<Vec<Result<T::ReplReturn, Error>>> {
     let content = std::fs::read_to_string(path)?;
-    Ok(T::new().interpret(&content, path.as_ref().to_str().map(Rc::from)))
+    Ok(T::new().interpret(&content, path.as_ref().to_str().map(sym)))
 }
 
 pub fn run_and_print_file<T: Interpreter, P: AsRef<std::path::Path>>(path: &P) -> io::Result<()> {

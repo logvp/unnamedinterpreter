@@ -5,6 +5,7 @@ use crate::ast::*;
 use crate::error::{Error, RuntimeError};
 use crate::interpreter::{Interpreter, RuntimeType};
 use crate::parser::Parser;
+use crate::symbol::Symbol;
 
 use super::RuntimeValue;
 use super::runtime::{Context, FunctionType, Lambda, Object, Variable};
@@ -24,7 +25,7 @@ impl Interpreter for TreeWalkInterpreter {
     fn interpret(
         &mut self,
         text: &str,
-        filename: Option<Rc<str>>,
+        filename: Option<Symbol>,
     ) -> Vec<Result<RuntimeValue, Error>> {
         let mut ret: Vec<Result<RuntimeValue, Error>> = Vec::default();
         match Parser::gen_ast(text, filename) {
@@ -61,20 +62,20 @@ impl Eval for Statement {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
         match self {
             Self::Declaration(lhs, rhs, is_const) => {
-                if ctx.contains_in_scope(&lhs.name) {
-                    Err(RuntimeError::VariableRedeclaration(lhs.name.to_string()))?
+                if ctx.contains_in_scope(lhs.name) {
+                    Err(RuntimeError::VariableRedeclaration(lhs.name))?
                 } else {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.declare(lhs.name.to_string(), value, *is_const);
+                    ctx.declare(lhs.name, value, *is_const);
                 }
             }
             Self::Assignment(lhs, rhs) => {
-                if ctx.contains(lhs.name().unwrap().as_ref()) {
+                if ctx.contains(lhs.name().unwrap()) {
                     let value = rhs.eval(Rc::clone(&ctx))?;
-                    ctx.update(lhs.name().unwrap().to_string(), value)?;
+                    ctx.update(lhs.name().unwrap(), value)?;
                 } else {
                     Err(RuntimeError::UnknownIdentifier(
-                        lhs.name().unwrap().to_string(),
+                        lhs.name().unwrap(),
                     ))?
                 }
             }
@@ -215,7 +216,7 @@ fn do_function_call(fun: RuntimeValue, args: Vec<RuntimeValue>) -> Result<Runtim
                     }
                     // Bind arguments to parameter names
                     for (ident, val) in parameters.iter().zip(args.into_iter()) {
-                        scope.declare(ident.name.to_string(), val, false);
+                        scope.declare(ident.name, val, false);
                     }
 
                     body.eval(Rc::new(scope))
@@ -256,9 +257,9 @@ impl Eval for Literal {
 
 impl Eval for Identifier {
     fn eval(&self, ctx: Rc<Context>) -> Result<RuntimeValue, Error> {
-        match ctx.get(&self.name) {
+        match ctx.get(self.name) {
             Some(Variable { val, .. }) => Ok(val),
-            None => Err(RuntimeError::UnknownIdentifier(self.name.to_string()).into()),
+            None => Err(RuntimeError::UnknownIdentifier(self.name).into()),
         }
     }
 }

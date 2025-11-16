@@ -1,3 +1,4 @@
+use crate::symbol::{Symbol, sym};
 use std::{collections::VecDeque, fmt::Display, iter::Peekable, rc::Rc};
 
 pub use crate::ast::Literal;
@@ -12,7 +13,7 @@ pub struct Token {
 #[derive(Debug)]
 pub enum TokenKind {
     Literal(Literal),
-    Identifier(Rc<str>),
+    Identifier(Symbol),
     LeftParen,
     RightParen,
     LeftAngle,
@@ -109,7 +110,7 @@ pub struct Lexer {
 }
 impl Lexer {
     #[allow(clippy::too_many_lines)]
-    pub fn lex(text: &str, filename: Option<Rc<str>>) -> Result<Self, LexicalError> {
+    pub fn lex(text: &str, filename: Option<Symbol>) -> Result<Self, LexicalError> {
         fn build_buffer_while(
             buffer: &mut String,
             loc: &mut Loc,
@@ -169,7 +170,7 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0x10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexicalError::BadHexLiteral(buffer, loc)),
+                        Err(_) => return Err(LexicalError::BadHexLiteral(sym(buffer.as_str()), loc)),
                     }
                 }
                 '0' if next_if_eq(&mut chars, 'b', &mut loc) => {
@@ -178,7 +179,7 @@ impl Lexer {
                     });
                     match i32::from_str_radix(&buffer, 0b10) {
                         Ok(int) => TokenKind::Literal(Literal::Integer(int)),
-                        Err(_) => return Err(LexicalError::BadBinLiteral(buffer, loc)),
+                        Err(_) => return Err(LexicalError::BadBinLiteral(sym(buffer.as_str()), loc)),
                     }
                 }
                 '0'..='9' => {
@@ -237,9 +238,9 @@ impl Lexer {
                     if let Some(c @ '"') = chars.next() {
                         loc.inc(c);
 
-                        TokenKind::Literal(Literal::String(Rc::from(buffer.clone())))
+                        TokenKind::Literal(Literal::String(sym(buffer.as_str())))
                     } else {
-                        return Err(LexicalError::UnterminatedStringLiteral(buffer, loc));
+                        return Err(LexicalError::UnterminatedStringLiteral(sym(buffer.as_str()), loc));
                     }
                 }
                 '<' if next_if_eq(&mut chars, '=', &mut loc) => TokenKind::LessEqual,
@@ -289,14 +290,14 @@ impl Lexer {
                         "while" => TokenKind::While,
                         "if" => TokenKind::If,
                         "else" => TokenKind::Else,
-                        _ => TokenKind::Identifier(Rc::from(buffer.clone())),
+                        _ => TokenKind::Identifier(sym(buffer.as_str())),
                     }
                 }
                 _ => {
                     build_buffer_while(&mut buffer, &mut loc, Some(c), &mut chars, |c| {
                         !c.is_whitespace()
                     });
-                    return Err(LexicalError::UnknownToken(buffer, loc));
+                    return Err(LexicalError::UnknownToken(sym(buffer.as_str()), loc));
                 }
             };
             add_tok(&mut tokens, token, &loc)

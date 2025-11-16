@@ -49,10 +49,10 @@ impl IntrinsicFunction {
                 if argc != 1 {
                     return Err(RuntimeError::ExpectedArgumentsFound(1, argc).into());
                 }
-                vm.result.set(Value::String(Rc::from(format!(
+                vm.result.set(Value::String(format!(
                     "{}",
                     vm.stack.get(vm.stack_p.get() - argc).unwrap().type_of()
-                ))));
+                )));
                 vm.pop_stack_p();
                 Ok(())
             }

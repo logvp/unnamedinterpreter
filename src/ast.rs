@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+use crate::symbol::Symbol;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Construct {
     TopLevel,
@@ -114,7 +116,7 @@ pub enum Lvalue {
 }
 impl Lvalue {
     #[expect(clippy::unnecessary_wraps)]
-    pub fn name(&self) -> Option<Rc<str>> {
+    pub fn name(&self) -> Option<Symbol> {
         match self {
             Self::Identifier(ident) => Some(ident.name.clone()),
             // _ => None,
@@ -124,13 +126,13 @@ impl Lvalue {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Identifier {
-    pub name: Rc<str>,
+    pub name: Symbol,
 }
 
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(i32),
-    String(Rc<str>),
+    String(Symbol),
     Boolean(bool),
 }
 
